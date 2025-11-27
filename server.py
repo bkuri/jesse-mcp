@@ -33,6 +33,15 @@ try:
     logger.info("✅ Phase 3 optimizer loaded")
 except ImportError as e:
     logger.warning(f"Phase 3 optimizer not available: {e}")
+
+# Import Phase 4 risk analyzer
+try:
+    from phase4_risk_analyzer import get_risk_analyzer
+
+    RISK_ANALYZER_AVAILABLE = True
+    logger.info("✅ Phase 4 risk analyzer loaded")
+except ImportError as e:
+    logger.warning(f"Phase 4 risk analyzer not available: {e}")
     OPTIMIZER_AVAILABLE = False
 
 
@@ -381,6 +390,154 @@ class JesseMCPServer:
                     "required": ["backtest_result"],
                 },
             },
+            {
+                "name": "monte_carlo",
+                "description": "Generate Monte Carlo simulations for comprehensive risk analysis with bootstrap resampling",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "backtest_result": {
+                            "type": "object",
+                            "description": "Result from backtest() or backtest_batch()",
+                        },
+                        "simulations": {
+                            "type": "integer",
+                            "description": "Number of Monte Carlo runs (default: 10000)",
+                            "default": 10000,
+                        },
+                        "confidence_levels": {
+                            "type": "array",
+                            "items": {"type": "number"},
+                            "description": "Confidence levels for intervals (default: [0.95, 0.99])",
+                        },
+                        "resample_method": {
+                            "type": "string",
+                            "enum": [
+                                "bootstrap",
+                                "block_bootstrap",
+                                "stationary_bootstrap",
+                            ],
+                            "description": "Bootstrap method (default: bootstrap)",
+                            "default": "bootstrap",
+                        },
+                        "block_size": {
+                            "type": "integer",
+                            "description": "Block size for block bootstrap (default: 20)",
+                            "default": 20,
+                        },
+                        "include_drawdowns": {
+                            "type": "boolean",
+                            "description": "Include drawdown analysis (default: true)",
+                            "default": True,
+                        },
+                        "include_returns": {
+                            "type": "boolean",
+                            "description": "Include return distribution analysis (default: true)",
+                            "default": True,
+                        },
+                    },
+                    "required": ["backtest_result"],
+                },
+            },
+            {
+                "name": "var_calculation",
+                "description": "Calculate Value at Risk using multiple methods (historical, parametric, Monte Carlo)",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "backtest_result": {
+                            "type": "object",
+                            "description": "Result from backtest() or backtest_batch()",
+                        },
+                        "confidence_levels": {
+                            "type": "array",
+                            "items": {"type": "number"},
+                            "description": "Confidence levels (default: [0.90, 0.95])",
+                        },
+                        "time_horizons": {
+                            "type": "array",
+                            "items": {"type": "integer"},
+                            "description": "Time horizons in days (default: [1, 5, 10])",
+                        },
+                        "method": {
+                            "type": "string",
+                            "enum": ["historical", "parametric", "monte_carlo", "all"],
+                            "description": "VaR calculation method (default: all)",
+                            "default": "all",
+                        },
+                        "monte_carlo_sims": {
+                            "type": "integer",
+                            "description": "Number of Monte Carlo simulations (default: 10000)",
+                            "default": 10000,
+                        },
+                    },
+                    "required": ["backtest_result"],
+                },
+            },
+            {
+                "name": "stress_test",
+                "description": "Test strategy performance under extreme market scenarios and black swan events",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "backtest_result": {
+                            "type": "object",
+                            "description": "Result from backtest() or backtest_batch()",
+                        },
+                        "scenarios": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Scenarios to test (default: all). Options: market_crash, volatility_spike, correlation_breakdown, flash_crash, black_swan",
+                        },
+                        "include_custom_scenarios": {
+                            "type": "boolean",
+                            "description": "Include custom market scenarios (default: false)",
+                            "default": False,
+                        },
+                    },
+                    "required": ["backtest_result"],
+                },
+            },
+            {
+                "name": "risk_report",
+                "description": "Generate comprehensive risk assessment and recommendations",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "backtest_result": {
+                            "type": "object",
+                            "description": "Result from backtest() or backtest_batch()",
+                        },
+                        "include_monte_carlo": {
+                            "type": "boolean",
+                            "description": "Include Monte Carlo analysis (default: true)",
+                            "default": True,
+                        },
+                        "include_var_analysis": {
+                            "type": "boolean",
+                            "description": "Include VaR analysis (default: true)",
+                            "default": True,
+                        },
+                        "include_stress_test": {
+                            "type": "boolean",
+                            "description": "Include stress testing (default: true)",
+                            "default": True,
+                        },
+                        "monte_carlo_sims": {
+                            "type": "integer",
+                            "description": "Number of Monte Carlo simulations (default: 5000)",
+                            "default": 5000,
+                        },
+                        "report_format": {
+                            "type": "string",
+                            "enum": ["summary", "detailed", "executive"],
+                            "description": "Report format (default: summary)",
+                            "default": "summary",
+                        },
+                    },
+                    "required": ["backtest_result"],
+                },
+            },
         ]
 
     async def call_tool(self, name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
@@ -408,12 +565,14 @@ class JesseMCPServer:
                 return await self.handle_candles_import(arguments)
             elif name == "optimize":
                 return await self.handle_optimize(arguments)
-            elif name == "walk_forward":
-                return await self.handle_walk_forward(arguments)
-            elif name == "backtest_batch":
-                return await self.handle_backtest_batch(arguments)
-            elif name == "analyze_results":
-                return await self.handle_analyze_results(arguments)
+            elif name == "monte_carlo":
+                return await self.handle_monte_carlo(arguments)
+            elif name == "var_calculation":
+                return await self.handle_var_calculation(arguments)
+            elif name == "stress_test":
+                return await self.handle_stress_test(arguments)
+            elif name == "risk_report":
+                return await self.handle_risk_report(arguments)
             else:
                 return {"error": f"Unknown tool: {name}"}
 
@@ -599,26 +758,97 @@ class JesseMCPServer:
             logger.error(f"Batch backtest failed: {e}")
             return {"error": str(e), "error_type": type(e).__name__}
 
-    async def handle_analyze_results(self, args: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle results analysis tool call - PHASE 3 IMPLEMENTATION"""
+    async def handle_monte_carlo(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle Monte Carlo tool call - PHASE 4 IMPLEMENTATION"""
         try:
-            if not OPTIMIZER_AVAILABLE:
-                return {"error": "Phase 3 optimizer not available"}
+            if not RISK_ANALYZER_AVAILABLE:
+                return {"error": "Phase 4 risk analyzer not available"}
 
-            optimizer = get_optimizer()
+            analyzer = get_risk_analyzer()
 
-            result = optimizer.analyze_results(
+            result = await analyzer.monte_carlo(
                 backtest_result=args["backtest_result"],
-                analysis_type=args.get("analysis_type", "basic"),
-                include_trade_analysis=args.get("include_trade_analysis", True),
-                include_correlation=args.get("include_correlation", False),
-                include_monte_carlo=args.get("include_monte_carlo", False),
+                simulations=args.get("simulations", 10000),
+                confidence_levels=args.get("confidence_levels"),
+                resample_method=args.get("resample_method", "bootstrap"),
+                block_size=args.get("block_size", 20),
+                include_drawdowns=args.get("include_drawdowns", True),
+                include_returns=args.get("include_returns", True),
             )
 
             return result
 
         except Exception as e:
-            logger.error(f"Results analysis failed: {e}")
+            logger.error(f"Monte Carlo analysis failed: {e}")
+            return {"error": str(e), "error_type": type(e).__name__}
+
+    async def handle_var_calculation(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle VaR calculation tool call - PHASE 4 IMPLEMENTATION"""
+        try:
+            if not RISK_ANALYZER_AVAILABLE:
+                return {"error": "Phase 4 risk analyzer not available"}
+
+            analyzer = get_risk_analyzer()
+
+            result = await analyzer.var_calculation(
+                backtest_result=args["backtest_result"],
+                confidence_levels=args.get("confidence_levels"),
+                time_horizons=args.get("time_horizons"),
+                method=args.get("method", "historical"),
+                monte_carlo_sims=args.get("monte_carlo_sims", 10000),
+            )
+
+            return result
+
+        except Exception as e:
+            logger.error(f"VaR calculation failed: {e}")
+            return {"error": str(e), "error_type": type(e).__name__}
+
+    async def handle_stress_test(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle stress test tool call - PHASE 4 IMPLEMENTATION"""
+        try:
+            if not RISK_ANALYZER_AVAILABLE:
+                return {"error": "Phase 4 risk analyzer not available"}
+
+            analyzer = get_risk_analyzer()
+
+            result = await analyzer.stress_test(
+                backtest_result=args["backtest_result"],
+                scenarios=args.get("scenarios"),
+                custom_scenarios=args.get("custom_scenarios"),
+                shock_magnitude=args.get("shock_magnitude", -0.20),
+                volatility_multiplier=args.get("volatility_multiplier", 3.0),
+                correlation_shift=args.get("correlation_shift", 0.8),
+                recovery_periods=args.get("recovery_periods"),
+            )
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Stress test failed: {e}")
+            return {"error": str(e), "error_type": type(e).__name__}
+
+    async def handle_risk_report(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle risk report tool call - PHASE 4 IMPLEMENTATION"""
+        try:
+            if not RISK_ANALYZER_AVAILABLE:
+                return {"error": "Phase 4 risk analyzer not available"}
+
+            analyzer = get_risk_analyzer()
+
+            result = await analyzer.risk_report(
+                backtest_result=args["backtest_result"],
+                include_monte_carlo=args.get("include_monte_carlo", True),
+                include_var_analysis=args.get("include_var_analysis", True),
+                include_stress_test=args.get("include_stress_test", True),
+                monte_carlo_sims=args.get("monte_carlo_sims", 5000),
+                report_format=args.get("report_format", "summary"),
+            )
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Risk report failed: {e}")
             return {"error": str(e), "error_type": type(e).__name__}
 
     async def list_resources(self) -> List[Dict[str, Any]]:
