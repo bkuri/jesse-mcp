@@ -25,6 +25,16 @@ except ImportError as e:
     JESSE_AVAILABLE = False
     get_jesse_wrapper = None
 
+# Import Phase 3 optimizer
+try:
+    from phase3_optimizer import get_optimizer
+
+    OPTIMIZER_AVAILABLE = True
+    logger.info("✅ Phase 3 optimizer loaded")
+except ImportError as e:
+    logger.warning(f"Phase 3 optimizer not available: {e}")
+    OPTIMIZER_AVAILABLE = False
+
 
 class JesseMCPServer:
     """Jesse MCP Server implementation"""
@@ -173,6 +183,62 @@ class JesseMCPServer:
                     "required": ["exchange", "symbol", "start_date"],
                 },
             },
+            {
+                "name": "optimize",
+                "description": "Optimize strategy hyperparameters using Optuna",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "strategy": {
+                            "type": "string",
+                            "description": "Strategy name to optimize",
+                        },
+                        "symbol": {
+                            "type": "string",
+                            "description": "Trading symbol (e.g., BTC-USDT)",
+                        },
+                        "timeframe": {
+                            "type": "string",
+                            "description": "Timeframe (e.g., 1h, 4h, 1D)",
+                        },
+                        "start_date": {
+                            "type": "string",
+                            "description": "Start date (YYYY-MM-DD)",
+                        },
+                        "end_date": {
+                            "type": "string",
+                            "description": "End date (YYYY-MM-DD)",
+                        },
+                        "param_space": {
+                            "type": "object",
+                            "description": "Parameter space to optimize. Format: {'param_name': {'type': 'float', 'min': 0, 'max': 1}}",
+                        },
+                        "metric": {
+                            "type": "string",
+                            "description": "Optimization metric (total_return, sharpe_ratio, etc.)",
+                            "default": "total_return",
+                        },
+                        "n_trials": {
+                            "type": "integer",
+                            "description": "Number of optimization trials",
+                            "default": 100,
+                        },
+                        "n_jobs": {
+                            "type": "integer",
+                            "description": "Number of parallel jobs",
+                            "default": 1,
+                        },
+                    },
+                    "required": [
+                        "strategy",
+                        "symbol",
+                        "timeframe",
+                        "start_date",
+                        "end_date",
+                        "param_space",
+                    ],
+                },
+            },
         ]
 
     async def call_tool(self, name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
@@ -195,6 +261,8 @@ class JesseMCPServer:
                 return await self.handle_strategy_validate(arguments)
             elif name == "candles_import":
                 return await self.handle_candles_import(arguments)
+            elif name == "optimize":
+                return await self.handle_optimize(arguments)
             else:
                 return {"error": f"Unknown tool: {name}"}
 
@@ -297,6 +365,37 @@ class JesseMCPServer:
         except Exception as e:
             logger.error(f"Candles import failed: {e}")
             return {"error": str(e), "success": False}
+
+    async def handle_optimize(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle optimize tool call - PHASE 3 IMPLEMENTATION"""
+        try:
+            if not OPTIMIZER_AVAILABLE:
+                return {"error": "Phase 3 optimizer not available"}
+
+            optimizer = get_optimizer()
+
+            result = await optimizer.optimize(
+                strategy=args["strategy"],
+                symbol=args["symbol"],
+                timeframe=args["timeframe"],
+                start_date=args["start_date"],
+                end_date=args["end_date"],
+                param_space=args["param_space"],
+                metric=args.get("metric", "total_return"),
+                n_trials=args.get("n_trials", 100),
+                n_jobs=args.get("n_jobs", 1),
+                exchange=args.get("exchange", "Binance"),
+                starting_balance=args.get("starting_balance", 10000),
+                fee=args.get("fee", 0.001),
+                leverage=args.get("leverage", 1),
+                exchange_type=args.get("exchange_type", "futures"),
+            )
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Optimization failed: {e}")
+            return {"error": str(e), "error_type": type(e).__name__}
 
     async def list_resources(self) -> List[Dict[str, Any]]:
         """List available resources"""
