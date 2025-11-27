@@ -15,16 +15,15 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("jesse-mcp")
 
-# Try to import Jesse modules
+# Import Jesse integration layer
 try:
-    import sys
-    import os
+    from jesse_integration import get_jesse_wrapper, JESSE_AVAILABLE
 
-    sys.path.append("/srv/containers/jesse")
-    JESSE_AVAILABLE = True
+    logger.info("✅ Jesse integration layer loaded")
 except ImportError as e:
-    logger.warning(f"Jesse not available: {e}")
+    logger.warning(f"Jesse integration layer not available: {e}")
     JESSE_AVAILABLE = False
+    get_jesse_wrapper = None
 
 
 class JesseMCPServer:
@@ -176,64 +175,80 @@ class JesseMCPServer:
             return {"error": f"Tool execution failed: {str(e)}"}
 
     async def handle_backtest(self, args: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle backtest tool call"""
-        # Phase 1: Placeholder implementation
-        return {
-            "message": "Backtest tool - Phase 1 placeholder",
-            "parameters": args,
-            "status": "Implementation pending",
-            "next_steps": [
-                "Import Jesse research module",
-                "Implement backtest() wrapper",
-                "Add candle data fetching",
-                "Add metrics formatting",
-            ],
-        }
+        """Handle backtest tool call - REAL IMPLEMENTATION"""
+        try:
+            if not JESSE_AVAILABLE or get_jesse_wrapper is None:
+                return {"error": "Jesse not available"}
+
+            wrapper = get_jesse_wrapper()
+
+            result = wrapper.backtest(
+                strategy=args["strategy"],
+                symbol=args["symbol"],
+                timeframe=args["timeframe"],
+                start_date=args["start_date"],
+                end_date=args["end_date"],
+                exchange=args.get("exchange", "Binance"),
+                starting_balance=args.get("starting_balance", 10000),
+                fee=args.get("fee", 0.001),
+                leverage=args.get("leverage", 1),
+                exchange_type=args.get("exchange_type", "futures"),
+                hyperparameters=args.get("hyperparameters"),
+                include_trades=args.get("include_trades", False),
+                include_equity_curve=args.get("include_equity_curve", False),
+                include_logs=args.get("include_logs", False),
+            )
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Backtest failed: {e}")
+            return {"error": str(e), "error_type": type(e).__name__}
 
     async def handle_strategy_list(self, args: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle strategy list tool call"""
-        # Phase 1: Placeholder implementation
-        return {
-            "message": "Strategy list tool - Phase 1 placeholder",
-            "parameters": args,
-            "status": "Implementation pending",
-            "next_steps": [
-                "Scan strategies directory",
-                "Parse strategy metadata",
-                "Extract hyperparameters",
-                "Validate strategy syntax",
-            ],
-        }
+        """Handle strategy list tool call - REAL IMPLEMENTATION"""
+        try:
+            if not JESSE_AVAILABLE or get_jesse_wrapper is None:
+                return {"error": "Jesse not available"}
+
+            wrapper = get_jesse_wrapper()
+            result = wrapper.list_strategies()
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Strategy list failed: {e}")
+            return {"error": str(e), "strategies": []}
 
     async def handle_strategy_read(self, args: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle strategy read tool call"""
-        # Phase 1: Placeholder implementation
-        return {
-            "message": "Strategy read tool - Phase 1 placeholder",
-            "parameters": args,
-            "status": "Implementation pending",
-            "next_steps": [
-                "Read strategy file from disk",
-                "Extract class definition",
-                "Parse hyperparameters method",
-                "Validate imports",
-            ],
-        }
+        """Handle strategy read tool call - REAL IMPLEMENTATION"""
+        try:
+            if not JESSE_AVAILABLE or get_jesse_wrapper is None:
+                return {"error": "Jesse not available"}
+
+            wrapper = get_jesse_wrapper()
+            result = wrapper.read_strategy(args["name"])
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Strategy read failed: {e}")
+            return {"error": str(e), "name": args.get("name")}
 
     async def handle_strategy_validate(self, args: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle strategy validate tool call"""
-        # Phase 1: Placeholder implementation
-        return {
-            "message": "Strategy validate tool - Phase 1 placeholder",
-            "parameters": args,
-            "status": "Implementation pending",
-            "next_steps": [
-                "Parse Python AST",
-                "Check required methods",
-                "Validate imports",
-                "Test syntax compilation",
-            ],
-        }
+        """Handle strategy validate tool call - REAL IMPLEMENTATION"""
+        try:
+            if not JESSE_AVAILABLE or get_jesse_wrapper is None:
+                return {"error": "Jesse not available"}
+
+            wrapper = get_jesse_wrapper()
+            result = wrapper.validate_strategy(args["code"])
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Strategy validation failed: {e}")
+            return {"error": str(e), "valid": False}
 
     async def list_resources(self) -> List[Dict[str, Any]]:
         """List available resources"""
@@ -253,21 +268,27 @@ class JesseMCPServer:
         ]
 
     async def read_resource(self, uri: str) -> Dict[str, Any]:
-        """Read resource content"""
-        if uri == "strategies://list":
-            return {
-                "message": "Strategy list resource - Phase 1 placeholder",
-                "strategies": [],
-                "status": "Implementation pending",
-            }
-        elif uri == "indicators://list":
-            return {
-                "message": "Indicators list resource - Phase 1 placeholder",
-                "indicators": [],
-                "status": "Implementation pending",
-            }
-        else:
-            return {"error": f"Unknown resource: {uri}"}
+        """Read resource content - REAL IMPLEMENTATION"""
+        try:
+            if uri == "strategies://list":
+                if not JESSE_AVAILABLE or get_jesse_wrapper is None:
+                    return {"error": "Jesse not available"}
+
+                wrapper = get_jesse_wrapper()
+                return wrapper.list_strategies()
+
+            elif uri == "indicators://list":
+                return {
+                    "message": "Indicators list - Phase 2 (200+ indicators available)",
+                    "status": "Implementation coming in Phase 4",
+                    "note": "Jesse provides 200+ indicators via ta.* namespace",
+                }
+            else:
+                return {"error": f"Unknown resource: {uri}"}
+
+        except Exception as e:
+            logger.error(f"Resource read failed for {uri}: {e}")
+            return {"error": str(e)}
 
 
 # Simple MCP protocol implementation
