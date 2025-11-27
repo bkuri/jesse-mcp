@@ -239,12 +239,157 @@ class JesseMCPServer:
                     ],
                 },
             },
+            {
+                "name": "walk_forward",
+                "description": "Perform walk-forward analysis to detect overfitting",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "strategy": {
+                            "type": "string",
+                            "description": "Strategy name",
+                        },
+                        "symbol": {
+                            "type": "string",
+                            "description": "Trading symbol (e.g., BTC-USDT)",
+                        },
+                        "timeframe": {
+                            "type": "string",
+                            "description": "Timeframe (e.g., 1h, 4h, 1D)",
+                        },
+                        "start_date": {
+                            "type": "string",
+                            "description": "Start date (YYYY-MM-DD)",
+                        },
+                        "end_date": {
+                            "type": "string",
+                            "description": "End date (YYYY-MM-DD)",
+                        },
+                        "in_sample_period": {
+                            "type": "integer",
+                            "description": "Days for optimization period (default: 365)",
+                            "default": 365,
+                        },
+                        "out_sample_period": {
+                            "type": "integer",
+                            "description": "Days for validation period (default: 30)",
+                            "default": 30,
+                        },
+                        "step_forward": {
+                            "type": "integer",
+                            "description": "Days to move window forward (default: 7)",
+                            "default": 7,
+                        },
+                        "param_space": {
+                            "type": "object",
+                            "description": "Parameter space for optimization (optional)",
+                        },
+                        "metric": {
+                            "type": "string",
+                            "description": "Optimization metric (default: total_return)",
+                            "default": "total_return",
+                        },
+                    },
+                    "required": [
+                        "strategy",
+                        "symbol",
+                        "timeframe",
+                        "start_date",
+                        "end_date",
+                    ],
+                },
+            },
+            {
+                "name": "backtest_batch",
+                "description": "Run multiple backtests concurrently for strategy comparison",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "strategy": {
+                            "type": "string",
+                            "description": "Strategy name",
+                        },
+                        "symbols": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "List of trading symbols",
+                        },
+                        "timeframes": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "List of timeframes",
+                        },
+                        "start_date": {
+                            "type": "string",
+                            "description": "Start date (YYYY-MM-DD)",
+                        },
+                        "end_date": {
+                            "type": "string",
+                            "description": "End date (YYYY-MM-DD)",
+                        },
+                        "hyperparameters": {
+                            "type": "array",
+                            "description": "List of parameter sets to test (optional)",
+                        },
+                        "concurrent_limit": {
+                            "type": "integer",
+                            "description": "Maximum concurrent backtests (default: 4)",
+                            "default": 4,
+                        },
+                    },
+                    "required": [
+                        "strategy",
+                        "symbols",
+                        "timeframes",
+                        "start_date",
+                        "end_date",
+                    ],
+                },
+            },
+            {
+                "name": "analyze_results",
+                "description": "Extract deep insights from backtest results",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "backtest_result": {
+                            "type": "object",
+                            "description": "Result from backtest() or backtest_batch()",
+                        },
+                        "analysis_type": {
+                            "type": "string",
+                            "enum": ["basic", "advanced", "deep"],
+                            "description": "Depth of analysis (default: basic)",
+                            "default": "basic",
+                        },
+                        "include_trade_analysis": {
+                            "type": "boolean",
+                            "description": "Include detailed trade analysis (default: true)",
+                            "default": True,
+                        },
+                        "include_correlation": {
+                            "type": "boolean",
+                            "description": "Include correlation analysis (default: false)",
+                            "default": False,
+                        },
+                        "include_monte_carlo": {
+                            "type": "boolean",
+                            "description": "Include Monte Carlo simulation (default: false)",
+                            "default": False,
+                        },
+                    },
+                    "required": ["backtest_result"],
+                },
+            },
         ]
 
     async def call_tool(self, name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
         """Handle tool calls"""
 
-        if not JESSE_AVAILABLE:
+        # Phase 3 tools can work with mock Jesse (optimizer handles fallback)
+        phase3_tools = ["optimize", "walk_forward", "backtest_batch", "analyze_results"]
+
+        if not JESSE_AVAILABLE and name not in phase3_tools:
             return {
                 "error": "Jesse framework not available",
                 "message": "Please ensure Jesse is installed and accessible.",
@@ -263,6 +408,12 @@ class JesseMCPServer:
                 return await self.handle_candles_import(arguments)
             elif name == "optimize":
                 return await self.handle_optimize(arguments)
+            elif name == "walk_forward":
+                return await self.handle_walk_forward(arguments)
+            elif name == "backtest_batch":
+                return await self.handle_backtest_batch(arguments)
+            elif name == "analyze_results":
+                return await self.handle_analyze_results(arguments)
             else:
                 return {"error": f"Unknown tool: {name}"}
 
@@ -395,6 +546,79 @@ class JesseMCPServer:
 
         except Exception as e:
             logger.error(f"Optimization failed: {e}")
+            return {"error": str(e), "error_type": type(e).__name__}
+
+    async def handle_walk_forward(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle walk-forward analysis tool call - PHASE 3 IMPLEMENTATION"""
+        try:
+            if not OPTIMIZER_AVAILABLE:
+                return {"error": "Phase 3 optimizer not available"}
+
+            optimizer = get_optimizer()
+
+            result = await optimizer.walk_forward(
+                strategy=args["strategy"],
+                symbol=args["symbol"],
+                timeframe=args["timeframe"],
+                start_date=args["start_date"],
+                end_date=args["end_date"],
+                in_sample_period=args.get("in_sample_period", 365),
+                out_sample_period=args.get("out_sample_period", 30),
+                step_forward=args.get("step_forward", 7),
+                param_space=args.get("param_space"),
+                metric=args.get("metric", "total_return"),
+            )
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Walk-forward analysis failed: {e}")
+            return {"error": str(e), "error_type": type(e).__name__}
+
+    async def handle_backtest_batch(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle batch backtest tool call - PHASE 3 IMPLEMENTATION"""
+        try:
+            if not OPTIMIZER_AVAILABLE:
+                return {"error": "Phase 3 optimizer not available"}
+
+            optimizer = get_optimizer()
+
+            result = await optimizer.backtest_batch(
+                strategy=args["strategy"],
+                symbols=args["symbols"],
+                timeframes=args["timeframes"],
+                start_date=args["start_date"],
+                end_date=args["end_date"],
+                hyperparameters=args.get("hyperparameters"),
+                concurrent_limit=args.get("concurrent_limit", 4),
+            )
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Batch backtest failed: {e}")
+            return {"error": str(e), "error_type": type(e).__name__}
+
+    async def handle_analyze_results(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle results analysis tool call - PHASE 3 IMPLEMENTATION"""
+        try:
+            if not OPTIMIZER_AVAILABLE:
+                return {"error": "Phase 3 optimizer not available"}
+
+            optimizer = get_optimizer()
+
+            result = optimizer.analyze_results(
+                backtest_result=args["backtest_result"],
+                analysis_type=args.get("analysis_type", "basic"),
+                include_trade_analysis=args.get("include_trade_analysis", True),
+                include_correlation=args.get("include_correlation", False),
+                include_monte_carlo=args.get("include_monte_carlo", False),
+            )
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Results analysis failed: {e}")
             return {"error": str(e), "error_type": type(e).__name__}
 
     async def list_resources(self) -> List[Dict[str, Any]]:
