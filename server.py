@@ -733,10 +733,26 @@ class JesseMCPServer:
     async def call_tool(self, name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
         """Handle tool calls"""
 
-        # Phase 3 tools can work with mock Jesse (optimizer handles fallback)
-        phase3_tools = ["optimize", "walk_forward", "backtest_batch", "analyze_results"]
+        # Phase 3-5 tools can work with mock data (don't require Jesse)
+        mock_capable_tools = [
+            # Phase 3
+            "optimize",
+            "walk_forward",
+            "backtest_batch",
+            "analyze_results",
+            # Phase 4
+            "monte_carlo",
+            "var_calculation",
+            "stress_test",
+            "risk_report",
+            # Phase 5
+            "correlation_matrix",
+            "pairs_backtest",
+            "factor_analysis",
+            "regime_detector",
+        ]
 
-        if not JESSE_AVAILABLE and name not in phase3_tools:
+        if not JESSE_AVAILABLE and name not in mock_capable_tools:
             return {
                 "error": "Jesse framework not available",
                 "message": "Please ensure Jesse is installed and accessible.",
