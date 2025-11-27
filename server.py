@@ -147,6 +147,32 @@ class JesseMCPServer:
                     "required": ["code"],
                 },
             },
+            {
+                "name": "candles_import",
+                "description": "Download candle data from exchange",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "exchange": {
+                            "type": "string",
+                            "description": "Exchange (Binance, Bitfinex, Bybit, Coinbase, Gate, Hyperliquid, Apex)",
+                        },
+                        "symbol": {
+                            "type": "string",
+                            "description": "Trading symbol (e.g., BTC-USDT)",
+                        },
+                        "start_date": {
+                            "type": "string",
+                            "description": "Start date (YYYY-MM-DD)",
+                        },
+                        "end_date": {
+                            "type": "string",
+                            "description": "End date (YYYY-MM-DD, default: today)",
+                        },
+                    },
+                    "required": ["exchange", "symbol", "start_date"],
+                },
+            },
         ]
 
     async def call_tool(self, name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
@@ -167,6 +193,8 @@ class JesseMCPServer:
                 return await self.handle_strategy_read(arguments)
             elif name == "strategy_validate":
                 return await self.handle_strategy_validate(arguments)
+            elif name == "candles_import":
+                return await self.handle_candles_import(arguments)
             else:
                 return {"error": f"Unknown tool: {name}"}
 
@@ -249,6 +277,26 @@ class JesseMCPServer:
         except Exception as e:
             logger.error(f"Strategy validation failed: {e}")
             return {"error": str(e), "valid": False}
+
+    async def handle_candles_import(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle candles import tool call - REAL IMPLEMENTATION"""
+        try:
+            if not JESSE_AVAILABLE or get_jesse_wrapper is None:
+                return {"error": "Jesse not available"}
+
+            wrapper = get_jesse_wrapper()
+            result = wrapper.import_candles(
+                exchange=args["exchange"],
+                symbol=args["symbol"],
+                start_date=args["start_date"],
+                end_date=args.get("end_date"),
+            )
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Candles import failed: {e}")
+            return {"error": str(e), "success": False}
 
     async def list_resources(self) -> List[Dict[str, Any]]:
         """List available resources"""
