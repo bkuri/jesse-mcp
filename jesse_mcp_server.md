@@ -509,15 +509,26 @@ Validate strategy code without saving.
 
 ### 9. `candles_import`
 
-Import candle data from exchange.
+**Download new candle data from exchange autonomously.**
+
+Jesse's `research.import_candles()` function allows the MCP server to directly download candle data from exchange APIs. This means **the server can fetch new data ranges on its own** without human intervention.
+
+**Supported Exchanges:**
+- Binance
+- Bitfinex
+- Bybit
+- Coinbase
+- Gate
+- Hyperliquid
+- Apex
 
 **Parameters:**
 ```typescript
 {
-  exchange: string,
-  symbol: string,
-  start_date: string,
-  end_date?: string,      // Default: today
+  exchange: string,              // e.g., "Binance"
+  symbol: string,                // e.g., "BTC-USDT"
+  start_date: string,            // "YYYY-MM-DD" (oldest data to fetch)
+  end_date?: string,             // "YYYY-MM-DD" (default: today)
 }
 ```
 
@@ -525,14 +536,41 @@ Import candle data from exchange.
 ```typescript
 {
   success: boolean,
-  candles_imported: number,
+  candles_imported: number,      // Total candles downloaded
   date_range: {
     start: string,
     end: string,
   },
   execution_time_ms: number,
+  exchange_supported: boolean,   // Is exchange available?
+  warnings?: string[],           // e.g., gaps in data
 }
 ```
+
+**Example Usage:**
+```
+Agent: Download BTC candle data for all of 2023 from Binance
+
+Tool Call: candles_import({
+  exchange: "Binance",
+  symbol: "BTC-USDT",
+  start_date: "2023-01-01",
+  end_date: "2023-12-31"
+})
+
+Response: {
+  success: true,
+  candles_imported: 525600,  // 1 minute candles for a year
+  date_range: {
+    start: "2023-01-01T00:00:00Z",
+    end: "2023-12-31T23:59:00Z"
+  },
+  execution_time_ms: 45000
+}
+```
+
+**Key Capability:**
+This tool enables **autonomous data acquisition**. The LLM agent can decide to download new data ranges as needed during the iteration process, without requiring manual intervention.
 
 ---
 

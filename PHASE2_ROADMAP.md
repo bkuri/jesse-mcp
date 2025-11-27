@@ -116,8 +116,32 @@ async def handle_backtest(args: Dict[str, Any]) -> Dict[str, Any]:
 
 **Operations:**
 - List available data ranges per symbol/exchange
-- Import new candle data from exchanges
+- Import new candle data from exchanges via `research.import_candles()`
 - Check for gaps or missing data
+
+**Supported Exchanges:**
+- Binance
+- Bitfinex
+- Bybit
+- Coinbase
+- Gate
+- Hyperliquid
+- Apex
+
+**Implementation Note:**
+Jesse already has `research.import_candles()` which downloads directly from exchange APIs:
+```python
+from jesse import research
+
+result = research.import_candles(
+    exchange='Binance',
+    symbol='BTC-USDT',
+    start_date='2023-01-01',
+    show_progressbar=False  # Set to False for MCP
+)
+```
+
+This means the MCP server CAN autonomously download new candle ranges!
 
 #### 2.5 Testing & Validation (Day 3)
 - [ ] Update test suite for real operations
