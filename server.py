@@ -42,7 +42,17 @@ try:
     logger.info("✅ Phase 4 risk analyzer loaded")
 except ImportError as e:
     logger.warning(f"Phase 4 risk analyzer not available: {e}")
-    OPTIMIZER_AVAILABLE = False
+    RISK_ANALYZER_AVAILABLE = False
+
+# Import Phase 5 pairs analyzer
+try:
+    from phase5_pairs_analyzer import get_pairs_analyzer
+
+    PAIRS_ANALYZER_AVAILABLE = True
+    logger.info("✅ Phase 5 pairs analyzer loaded")
+except ImportError as e:
+    logger.warning(f"Phase 5 pairs analyzer not available: {e}")
+    PAIRS_ANALYZER_AVAILABLE = False
 
 
 class JesseMCPServer:
@@ -538,6 +548,186 @@ class JesseMCPServer:
                     "required": ["backtest_result"],
                 },
             },
+            {
+                "name": "correlation_matrix",
+                "description": "Analyze cross-asset correlations and identify pairs trading opportunities",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "backtest_results": {
+                            "type": "array",
+                            "items": {"type": "object"},
+                            "description": "List of backtest results from different symbols",
+                        },
+                        "lookback_period": {
+                            "type": "integer",
+                            "description": "Days to analyze (default: 60)",
+                            "default": 60,
+                        },
+                        "correlation_threshold": {
+                            "type": "number",
+                            "description": "Minimum correlation for pair suggestions (default: 0.7)",
+                            "default": 0.7,
+                        },
+                        "include_rolling": {
+                            "type": "boolean",
+                            "description": "Include rolling correlations (default: true)",
+                            "default": True,
+                        },
+                        "rolling_window": {
+                            "type": "integer",
+                            "description": "Window size for rolling correlation (default: 20)",
+                            "default": 20,
+                        },
+                        "include_heatmap": {
+                            "type": "boolean",
+                            "description": "Generate correlation heatmap (default: false)",
+                            "default": False,
+                        },
+                    },
+                    "required": ["backtest_results"],
+                },
+            },
+            {
+                "name": "pairs_backtest",
+                "description": "Backtest pairs trading strategies (statistical arbitrage, mean reversion)",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "pair": {
+                            "type": "object",
+                            "description": "Dict with 'symbol1' and 'symbol2'",
+                        },
+                        "strategy": {
+                            "type": "string",
+                            "enum": [
+                                "mean_reversion",
+                                "momentum_divergence",
+                                "cointegration",
+                            ],
+                            "description": "Pairs trading strategy (default: mean_reversion)",
+                            "default": "mean_reversion",
+                        },
+                        "backtest_result_1": {
+                            "type": "object",
+                            "description": "Backtest result for first symbol",
+                        },
+                        "backtest_result_2": {
+                            "type": "object",
+                            "description": "Backtest result for second symbol",
+                        },
+                        "lookback_period": {
+                            "type": "integer",
+                            "description": "Historical period for calculations (default: 60)",
+                            "default": 60,
+                        },
+                        "entry_threshold": {
+                            "type": "number",
+                            "description": "Entry signal threshold - std dev (default: 2.0)",
+                            "default": 2.0,
+                        },
+                        "exit_threshold": {
+                            "type": "number",
+                            "description": "Exit signal threshold - std dev (default: 0.5)",
+                            "default": 0.5,
+                        },
+                        "position_size": {
+                            "type": "number",
+                            "description": "Risk per trade (default: 0.02)",
+                            "default": 0.02,
+                        },
+                        "max_holding_days": {
+                            "type": "integer",
+                            "description": "Maximum days to hold position (default: 20)",
+                            "default": 20,
+                        },
+                    },
+                    "required": ["pair", "backtest_result_1", "backtest_result_2"],
+                },
+            },
+            {
+                "name": "factor_analysis",
+                "description": "Decompose returns into systematic factors (market, size, momentum, value)",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "backtest_result": {
+                            "type": "object",
+                            "description": "Strategy backtest result",
+                        },
+                        "factors": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Factors to analyze (default: market, size, momentum, value)",
+                        },
+                        "factor_returns": {
+                            "type": "object",
+                            "description": "Dict mapping factors to historical returns",
+                        },
+                        "include_residuals": {
+                            "type": "boolean",
+                            "description": "Include unexplained returns (default: true)",
+                            "default": True,
+                        },
+                        "analysis_period": {
+                            "type": "integer",
+                            "description": "Days to analyze (default: 252, annual)",
+                            "default": 252,
+                        },
+                        "confidence_level": {
+                            "type": "number",
+                            "description": "Statistical confidence (default: 0.95)",
+                            "default": 0.95,
+                        },
+                    },
+                    "required": ["backtest_result"],
+                },
+            },
+            {
+                "name": "regime_detector",
+                "description": "Identify market regimes and transitions (bull, bear, high/low volatility)",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "backtest_results": {
+                            "type": "array",
+                            "items": {"type": "object"},
+                            "description": "List of backtest results",
+                        },
+                        "lookback_period": {
+                            "type": "integer",
+                            "description": "Days for regime analysis (default: 60)",
+                            "default": 60,
+                        },
+                        "detection_method": {
+                            "type": "string",
+                            "enum": [
+                                "hmm",
+                                "volatility_based",
+                                "correlation_based",
+                            ],
+                            "description": "Regime detection method (default: hmm)",
+                            "default": "hmm",
+                        },
+                        "n_regimes": {
+                            "type": "integer",
+                            "description": "Number of market regimes (default: 3)",
+                            "default": 3,
+                        },
+                        "include_transitions": {
+                            "type": "boolean",
+                            "description": "Include regime transition analysis (default: true)",
+                            "default": True,
+                        },
+                        "include_forecast": {
+                            "type": "boolean",
+                            "description": "Forecast next regime probability (default: true)",
+                            "default": True,
+                        },
+                    },
+                    "required": ["backtest_results"],
+                },
+            },
         ]
 
     async def call_tool(self, name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
@@ -573,6 +763,14 @@ class JesseMCPServer:
                 return await self.handle_stress_test(arguments)
             elif name == "risk_report":
                 return await self.handle_risk_report(arguments)
+            elif name == "correlation_matrix":
+                return await self.handle_correlation_matrix(arguments)
+            elif name == "pairs_backtest":
+                return await self.handle_pairs_backtest(arguments)
+            elif name == "factor_analysis":
+                return await self.handle_factor_analysis(arguments)
+            elif name == "regime_detector":
+                return await self.handle_regime_detector(arguments)
             else:
                 return {"error": f"Unknown tool: {name}"}
 
@@ -849,6 +1047,101 @@ class JesseMCPServer:
 
         except Exception as e:
             logger.error(f"Risk report failed: {e}")
+            return {"error": str(e), "error_type": type(e).__name__}
+
+    async def handle_correlation_matrix(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle correlation matrix tool call - PHASE 5 IMPLEMENTATION"""
+        try:
+            if not PAIRS_ANALYZER_AVAILABLE:
+                return {"error": "Phase 5 pairs analyzer not available"}
+
+            analyzer = get_pairs_analyzer()
+
+            result = await analyzer.correlation_matrix(
+                backtest_results=args.get("backtest_results", []),
+                lookback_period=args.get("lookback_period", 60),
+                correlation_threshold=args.get("correlation_threshold", 0.7),
+                include_rolling=args.get("include_rolling", True),
+                rolling_window=args.get("rolling_window", 20),
+                include_heatmap=args.get("include_heatmap", False),
+            )
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Correlation matrix failed: {e}")
+            return {"error": str(e), "error_type": type(e).__name__}
+
+    async def handle_pairs_backtest(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle pairs backtest tool call - PHASE 5 IMPLEMENTATION"""
+        try:
+            if not PAIRS_ANALYZER_AVAILABLE:
+                return {"error": "Phase 5 pairs analyzer not available"}
+
+            analyzer = get_pairs_analyzer()
+
+            result = await analyzer.pairs_backtest(
+                pair=args.get("pair", {}),
+                strategy=args.get("strategy", "mean_reversion"),
+                backtest_result_1=args.get("backtest_result_1"),
+                backtest_result_2=args.get("backtest_result_2"),
+                lookback_period=args.get("lookback_period", 60),
+                entry_threshold=args.get("entry_threshold", 2.0),
+                exit_threshold=args.get("exit_threshold", 0.5),
+                position_size=args.get("position_size", 0.02),
+                max_holding_days=args.get("max_holding_days", 20),
+            )
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Pairs backtest failed: {e}")
+            return {"error": str(e), "error_type": type(e).__name__}
+
+    async def handle_factor_analysis(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle factor analysis tool call - PHASE 5 IMPLEMENTATION"""
+        try:
+            if not PAIRS_ANALYZER_AVAILABLE:
+                return {"error": "Phase 5 pairs analyzer not available"}
+
+            analyzer = get_pairs_analyzer()
+
+            result = await analyzer.factor_analysis(
+                backtest_result=args.get("backtest_result", {}),
+                factors=args.get("factors"),
+                factor_returns=args.get("factor_returns"),
+                include_residuals=args.get("include_residuals", True),
+                analysis_period=args.get("analysis_period", 252),
+                confidence_level=args.get("confidence_level", 0.95),
+            )
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Factor analysis failed: {e}")
+            return {"error": str(e), "error_type": type(e).__name__}
+
+    async def handle_regime_detector(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle regime detector tool call - PHASE 5 IMPLEMENTATION"""
+        try:
+            if not PAIRS_ANALYZER_AVAILABLE:
+                return {"error": "Phase 5 pairs analyzer not available"}
+
+            analyzer = get_pairs_analyzer()
+
+            result = await analyzer.regime_detector(
+                backtest_results=args.get("backtest_results", []),
+                lookback_period=args.get("lookback_period", 60),
+                detection_method=args.get("detection_method", "hmm"),
+                n_regimes=args.get("n_regimes", 3),
+                include_transitions=args.get("include_transitions", True),
+                include_forecast=args.get("include_forecast", True),
+            )
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Regime detector failed: {e}")
             return {"error": str(e), "error_type": type(e).__name__}
 
     async def list_resources(self) -> List[Dict[str, Any]]:
