@@ -1,0 +1,25 @@
+"""
+Jesse MCP Core Utilities
+
+Provides integration with Jesse framework and mock data generation.
+"""
+
+from jesse_mcp.core.integrations import (
+    get_jesse_wrapper,
+    JESSE_AVAILABLE,
+    JesseWrapper,
+    JesseIntegrationError,
+)
+from jesse_mcp.core.mock import (
+    MockJesseWrapper,
+    get_mock_jesse_wrapper,
+)
+
+__all__ = [
+    "get_jesse_wrapper",
+    "JESSE_AVAILABLE",
+    "JesseWrapper",
+    "JesseIntegrationError",
+    "MockJesseWrapper",
+    "get_mock_jesse_wrapper",
+]

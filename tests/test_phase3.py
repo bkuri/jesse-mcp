@@ -7,13 +7,15 @@ import asyncio
 import json
 import sys
 import os
+import pytest
 
 # Add current directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from phase3_optimizer import get_optimizer
+from jesse_mcp.phase3.optimizer import get_optimizer
 
 
+@pytest.mark.asyncio
 async def test_optimize():
     """Test the optimize function with mock data"""
     print("🚀 Testing Phase 3 optimize() tool with mock data...")
@@ -87,6 +89,7 @@ async def test_optimize():
         return False
 
 
+@pytest.mark.asyncio
 async def test_walk_forward():
     """Test walk-forward analysis"""
     print("\n🔄 Testing walk_forward() tool...")
@@ -129,6 +132,7 @@ async def test_walk_forward():
         return False
 
 
+@pytest.mark.asyncio
 async def test_analyze_results():
     """Test results analysis"""
     print("\n📊 Testing analyze_results() tool...")

@@ -6,12 +6,13 @@ Test Phase 5 Pairs Trading & Advanced Analysis Tools
 import asyncio
 import sys
 import os
+import pytest
 
 # Add current directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 try:
-    from phase5_pairs_analyzer import get_pairs_analyzer
+    from jesse_mcp.phase5.pairs_analyzer import get_pairs_analyzer
 
     print("✅ Phase 5 pairs analyzer imported successfully")
 except ImportError as e:
@@ -19,6 +20,7 @@ except ImportError as e:
     sys.exit(1)
 
 
+@pytest.mark.asyncio
 async def test_phase5_tools():
     """Test all Phase 5 tools"""
     print("🧪 Phase 5 Tools Test Suite")

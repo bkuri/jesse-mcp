@@ -28,13 +28,13 @@ except ImportError:
 
 # Import our integration layers
 try:
-    from jesse_integration import get_jesse_wrapper, JESSE_AVAILABLE
+    from jesse_mcp.core.integrations import get_jesse_wrapper, JESSE_AVAILABLE
 except ImportError:
     JESSE_AVAILABLE = False
     get_jesse_wrapper = None
 
 try:
-    from mock_jesse import get_mock_jesse_wrapper
+    from jesse_mcp.core.mock import get_mock_jesse_wrapper
 
     MOCK_AVAILABLE = True
 except ImportError:

@@ -8,13 +8,14 @@ import asyncio
 import sys
 import os
 import time
+import pytest
 from datetime import datetime
 
 # Add current directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 try:
-    from server import JesseMCPServer
+    from jesse_mcp.server import JesseMCPServer
 
     print("✅ Jesse MCP Server imported successfully")
 except ImportError as e:

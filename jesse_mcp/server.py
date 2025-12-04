@@ -17,7 +17,7 @@ logger = logging.getLogger("jesse-mcp")
 
 # Import Jesse integration layer
 try:
-    from jesse_integration import get_jesse_wrapper, JESSE_AVAILABLE
+    from jesse_mcp.core.integrations import get_jesse_wrapper, JESSE_AVAILABLE
 
     logger.info("✅ Jesse integration layer loaded")
 except ImportError as e:
@@ -27,7 +27,7 @@ except ImportError as e:
 
 # Import Phase 3 optimizer
 try:
-    from phase3_optimizer import get_optimizer
+    from jesse_mcp.phase3.optimizer import get_optimizer
 
     OPTIMIZER_AVAILABLE = True
     logger.info("✅ Phase 3 optimizer loaded")
@@ -36,7 +36,7 @@ except ImportError as e:
 
 # Import Phase 4 risk analyzer
 try:
-    from phase4_risk_analyzer import get_risk_analyzer
+    from jesse_mcp.phase4.risk_analyzer import get_risk_analyzer
 
     RISK_ANALYZER_AVAILABLE = True
     logger.info("✅ Phase 4 risk analyzer loaded")
@@ -46,7 +46,7 @@ except ImportError as e:
 
 # Import Phase 5 pairs analyzer
 try:
-    from phase5_pairs_analyzer import get_pairs_analyzer
+    from jesse_mcp.phase5.pairs_analyzer import get_pairs_analyzer
 
     PAIRS_ANALYZER_AVAILABLE = True
     logger.info("✅ Phase 5 pairs analyzer loaded")

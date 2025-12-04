@@ -1,0 +1,7 @@
+version: '3.8'
+services:
+  metamcp:
+    environment:
+      - JESSE_MCP_ENABLED=true
+    volumes:
+      - ./jesse_mcp:/app/jesse-mcp

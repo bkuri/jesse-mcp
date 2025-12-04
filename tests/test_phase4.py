@@ -6,12 +6,13 @@ Test Phase 4 Risk Analysis Tools
 import asyncio
 import sys
 import os
+import pytest
 
 # Add current directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 try:
-    from phase4_risk_analyzer import get_risk_analyzer
+    from jesse_mcp.phase4.risk_analyzer import get_risk_analyzer
 
     print("✅ Phase 4 risk analyzer imported successfully")
 except ImportError as e:
@@ -19,6 +20,7 @@ except ImportError as e:
     sys.exit(1)
 
 
+@pytest.mark.asyncio
 async def test_phase4_tools():
     """Test all Phase 4 tools"""
     print("🧪 Phase 4 Tools Test Suite")

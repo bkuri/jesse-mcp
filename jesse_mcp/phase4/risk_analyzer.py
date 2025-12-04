@@ -15,7 +15,7 @@ import numpy as np
 
 # Import existing optimizer
 try:
-    from phase3_optimizer import Phase3Optimizer
+    from jesse_mcp.phase3.optimizer import Phase3Optimizer
 
     PHASE3_AVAILABLE = True
 except ImportError:

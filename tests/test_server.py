@@ -8,8 +8,10 @@ import json
 import sys
 import subprocess
 import os
+import pytest
 
 
+@pytest.mark.asyncio
 async def test_server():
     """Test jesse-mcp server"""
 
