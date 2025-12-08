@@ -23,7 +23,7 @@ python server.py
 
 ## Documentation
 
-See [PRD](jesse_mcp_server.md) for complete specifications.
+See [PRD](docs/PRD.md) for complete specifications. Other documents are also available in that folder (in fact, some cleanup may be required).
 
 ## Architecture
 
@@ -47,3 +47,4 @@ Based on the PRD, implementation phases:
 ## License
 
 MIT
+# Test change for manual sync
