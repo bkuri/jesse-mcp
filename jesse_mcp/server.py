@@ -1200,6 +1200,57 @@ class JesseMCPServer:
             logger.error(f"Resource read failed for {uri}: {e}")
             return {"error": str(e)}
 
+    async def run(self):
+        """Run MCP server with stdio communication"""
+        logger.info(f"Starting {self.name} v{self.version}")
+
+        if not JESSE_AVAILABLE:
+            logger.warning("Jesse framework not available - using mock implementations")
+
+        try:
+            while True:
+                # Read request from stdin
+                line = sys.stdin.readline()
+                if not line:
+                    break
+
+                try:
+                    request = json.loads(line.strip())
+                    response = await self._handle_request(request)
+
+                    # Send response to stdout
+                    print(json.dumps(response))
+                    sys.stdout.flush()
+
+                except json.JSONDecodeError:
+                    error_response = {"error": "Invalid JSON request"}
+                    print(json.dumps(error_response))
+                    sys.stdout.flush()
+
+        except KeyboardInterrupt:
+            logger.info("Server stopped by user")
+        except Exception as e:
+            logger.error(f"Server error: {e}")
+
+    async def _handle_request(self, request: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle MCP request"""
+        method = request.get("method")
+        params = request.get("params", {})
+
+        if method == "tools/list":
+            return {"tools": await self.list_tools()}
+        elif method == "tools/call":
+            name = params.get("name")
+            arguments = params.get("arguments", {})
+            return await self.call_tool(name, arguments)
+        elif method == "resources/list":
+            return {"resources": await self.list_resources()}
+        elif method == "resources/read":
+            uri = params.get("uri")
+            return await self.read_resource(uri)
+        else:
+            return {"error": f"Unknown method: {method}"}
+
 
 # Simple MCP protocol implementation
 async def handle_request(request: Dict[str, Any]) -> Dict[str, Any]:
