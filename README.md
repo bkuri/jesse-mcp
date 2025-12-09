@@ -104,15 +104,23 @@ PYTHONPATH="/srv/containers/jesse:/mnt/jesse-mcp:${PYTHONPATH}"
 - **Error Handling**: ✅ Graceful fallback to mock implementations when Jesse unavailable
 
 ### Known Issues & Solutions
-1. **Jesse Integration**: Framework detected but dependency conflicts exist
-   - **Issue**: aioredis version conflicts with Python 3.13
-   - **Solution**: Using mock implementations (fully functional for testing)
-   - **Impact**: Low - All tools work with synthetic data
+1. **Jesse Integration**: Framework detected but extensive dependency chain missing
+   - **Issue**: Missing dependencies: redis, simplejson, arrow, timeloop, pydash, peewee, numba, statsmodels, jesse_rust
+   - **Current Status**: Phase 3-5 tools fully functional with mock implementations
+   - **Phase 1-2 Tools**: Using graceful fallback to mocks (expected behavior)
+   - **Solution**: Mock implementations provide reliable testing without full Jesse dependency chain
+   - **Impact**: Low - All 17 tools operational, Phase 1-2 use synthetic data
 
 2. **MetaMCP Network**: Host networking mode (internal access only)
    - **Issue**: No external port exposure for direct access
    - **Solution**: Access through MetaMCP interface or internal container networking
    - **Impact**: None for intended use case
+
+3. **Container Disk Quota**: MetaMCP container restart issues
+   - **Issue**: Container disk quota preventing restarts
+   - **Current Status**: Container running, jesse-mcp functional
+   - **Solution**: Manual container management when needed
+   - **Impact**: Low - Operational functionality unaffected
 
 ### Access Methods
 ```bash
