@@ -1,8 +1,12 @@
 """
 Jesse REST API Client
 
-Provides a clean abstraction over Jesse's REST API (http://localhost:8000)
+Provides a clean abstraction over Jesse's REST API running on server2
 allowing full interactivity with Jesse without requiring local module imports.
+
+Configuration (via MetaMCP MCP Servers panel):
+- JESSE_URL: URL to Jesse API (default: http://server2:8000)
+- JESSE_API_TOKEN: API authentication token/password
 """
 
 import os
@@ -13,7 +17,8 @@ from typing import Dict, Any, Optional
 logger = logging.getLogger("jesse-mcp.rest-client")
 
 # Get Jesse API configuration from environment
-JESSE_URL = os.getenv("JESSE_URL", "http://localhost:8000")
+# Note: Jesse runs on server2, not localhost. Update via MetaMCP env vars.
+JESSE_URL = os.getenv("JESSE_URL", "http://server2:8000")
 JESSE_API_TOKEN = os.getenv("JESSE_API_TOKEN", "")
 JESSE_API_BASE = JESSE_URL
 
