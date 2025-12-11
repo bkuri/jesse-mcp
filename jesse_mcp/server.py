@@ -102,7 +102,22 @@ def backtest(
     include_equity_curve: bool = False,
     include_logs: bool = False,
 ) -> dict:
-    """Run a single backtest with specified parameters via Jesse REST API"""
+    """
+    Run a single backtest on a strategy with specified parameters.
+
+    Returns metrics: total_return, sharpe_ratio, max_drawdown, win_rate, total_trades, etc.
+
+    Use this to:
+    - Test a single strategy version
+    - Get baseline metrics for comparison
+    - As first step before analyze_results, monte_carlo, or risk_report
+    - For A/B testing: run backtest twice with different parameters/strategies
+
+    Example flow for A/B testing:
+    1. backtest(strategy="EMA_original", ...)
+    2. backtest(strategy="EMA_with_filter", ...)
+    3. analyze_results() on both to compare
+    """
     try:
         from jesse_mcp.core.jesse_rest_client import get_jesse_rest_client
 
@@ -131,7 +146,12 @@ def backtest(
 
 @mcp.tool
 def strategy_list(include_test_strategies: bool = False) -> dict:
-    """List available strategies"""
+    """
+    List all available trading strategies.
+
+    Use this as the FIRST step to see what strategies are available to test.
+    Returns list of strategy names that can be passed to backtest(), analyze_results(), etc.
+    """
     try:
         return jesse.list_strategies(include_test_strategies)
     except Exception as e:
@@ -202,7 +222,17 @@ async def optimize(
     leverage: float = 1,
     exchange_type: str = "futures",
 ) -> dict:
-    """Optimize strategy hyperparameters via Jesse REST API"""
+    """
+    Auto-optimize strategy hyperparameters using Bayesian optimization.
+
+    Automatically tests many parameter combinations to find best metrics.
+
+    Example: Improve Sharpe ratio by optimizing EMA periods
+    - param_space: {"ema_fast": [5, 30], "ema_slow": [20, 100]}
+    - metric: "sharpe_ratio"
+
+    Returns best parameters found and their performance metrics.
+    """
     try:
         from jesse_mcp.core.jesse_rest_client import get_jesse_rest_client
 
@@ -294,7 +324,21 @@ def analyze_results(
     include_correlation: bool = False,
     include_monte_carlo: bool = False,
 ) -> dict:
-    """Extract deep insights from backtest results"""
+    """
+    Extract deep insights from backtest results.
+
+    Takes backtest result dict and returns detailed analysis including:
+    - Trade metrics (win rate, avg return, etc.)
+    - Performance breakdown
+    - Risk metrics summary
+
+    Use this after backtest() to understand strategy performance better.
+    Common workflow:
+    1. backtest() -> get result
+    2. analyze_results(result) -> understand what happened
+    3. monte_carlo() -> validate with simulation
+    4. risk_report() -> comprehensive assessment
+    """
     try:
         result = optimizer.analyze_results(
             backtest_result=backtest_result,
