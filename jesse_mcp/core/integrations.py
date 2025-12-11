@@ -203,9 +203,12 @@ class JesseWrapper:
             logger.error(traceback.format_exc())
             return {"error": str(e), "error_type": type(e).__name__, "success": False}
 
-    def list_strategies(self) -> Dict[str, Any]:
+    def list_strategies(self, include_test_strategies: bool = False) -> Dict[str, Any]:
         """
         List all available strategies
+
+        Args:
+            include_test_strategies: Whether to include test strategies (unused, for compatibility)
 
         Returns:
             Dict with list of strategies and their metadata
