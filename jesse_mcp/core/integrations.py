@@ -134,6 +134,14 @@ class JesseWrapper:
         try:
             logger.info(f"Starting backtest: {strategy} on {symbol} ({timeframe})")
 
+            # Check if we have access to Jesse's research module (requires local installation)
+            if not JESSE_PATH:
+                return {
+                    "error": "Backtest requires local Jesse installation",
+                    "detail": "This tool requires access to Jesse's research module which is only available when Jesse is installed locally. Use the Jesse API backtest endpoint instead.",
+                    "success": False,
+                }
+
             # Format config for Jesse
             config = {
                 "starting_balance": starting_balance,
@@ -348,6 +356,14 @@ class JesseWrapper:
         """
         try:
             logger.info(f"Importing candles: {exchange} {symbol} from {start_date}")
+
+            # Check if we have access to Jesse's research module (requires local installation)
+            if not JESSE_PATH:
+                return {
+                    "error": "Import candles requires local Jesse installation",
+                    "detail": "This tool requires access to Jesse's research module which is only available when Jesse is installed locally. Use the Jesse API import endpoint instead.",
+                    "success": False,
+                }
 
             result = research.import_candles(
                 exchange=exchange,
