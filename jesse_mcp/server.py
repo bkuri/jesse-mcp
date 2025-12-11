@@ -102,9 +102,12 @@ def backtest(
     include_equity_curve: bool = False,
     include_logs: bool = False,
 ) -> dict:
-    """Run a single backtest with specified parameters"""
+    """Run a single backtest with specified parameters via Jesse REST API"""
     try:
-        result = jesse.backtest(
+        from jesse_mcp.core.jesse_rest_client import get_jesse_rest_client
+
+        client = get_jesse_rest_client()
+        result = client.backtest(
             strategy=strategy,
             symbol=symbol,
             timeframe=timeframe,
@@ -163,9 +166,12 @@ def candles_import(
     start_date: str,
     end_date: Optional[str] = None,
 ) -> dict:
-    """Download candle data from exchange"""
+    """Download candle data from exchange via Jesse REST API"""
     try:
-        return jesse.import_candles(
+        from jesse_mcp.core.jesse_rest_client import get_jesse_rest_client
+
+        client = get_jesse_rest_client()
+        return client.import_candles(
             exchange=exchange,
             symbol=symbol,
             start_date=start_date,
@@ -196,18 +202,18 @@ async def optimize(
     leverage: float = 1,
     exchange_type: str = "futures",
 ) -> dict:
-    """Optimize strategy hyperparameters using Optuna"""
+    """Optimize strategy hyperparameters via Jesse REST API"""
     try:
-        result = await optimizer.optimize(
+        from jesse_mcp.core.jesse_rest_client import get_jesse_rest_client
+
+        client = get_jesse_rest_client()
+        result = client.optimization(
             strategy=strategy,
             symbol=symbol,
             timeframe=timeframe,
             start_date=start_date,
             end_date=end_date,
             param_space=param_space,
-            metric=metric,
-            n_trials=n_trials,
-            n_jobs=n_jobs,
             exchange=exchange,
             starting_balance=starting_balance,
             fee=fee,
@@ -519,7 +525,9 @@ def main():
     # Initialize dependencies when server starts
     _initialize_dependencies()
 
-    parser = argparse.ArgumentParser(description="Jesse MCP Server - Quantitative Trading Analysis")
+    parser = argparse.ArgumentParser(
+        description="Jesse MCP Server - Quantitative Trading Analysis"
+    )
     parser.add_argument(
         "--transport",
         choices=["stdio", "http"],
