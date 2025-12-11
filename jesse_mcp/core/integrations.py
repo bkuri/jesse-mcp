@@ -42,11 +42,11 @@ def _check_jesse_ntfy_available() -> bool:
         return False
 
 
-# Check if Jesse API is accessible via localhost:8000
+# Check if Jesse API is accessible
 # This allows jesse-mcp to work without importing Jesse dependencies
 JESSE_AVAILABLE = False
 JESSE_ERROR = None
-JESSE_API_URL = "http://localhost:8000"
+JESSE_API_URL = os.getenv("JESSE_URL", "http://localhost:8000")
 JESSE_RESEARCH_AVAILABLE = False  # Track if we can import Jesse's research module
 
 try:
@@ -55,7 +55,7 @@ try:
     response = requests.get(f"{JESSE_API_URL}/", timeout=2)
     if response.status_code == 200:
         JESSE_AVAILABLE = True
-        logger.info("✅ Jesse API found at http://localhost:8000")
+        logger.info(f"✅ Jesse API found at {JESSE_API_URL}")
 except Exception as e:
     JESSE_ERROR = str(e)
     logger.warning(f"⚠️ Jesse API not accessible at {JESSE_API_URL}: {e}")
