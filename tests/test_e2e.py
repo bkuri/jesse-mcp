@@ -23,6 +23,16 @@ except ImportError as e:
     sys.exit(1)
 
 
+def get_client_transport():
+    """Helper to create StdioTransport for the MCP server"""
+    try:
+        from fastmcp.client.transports import StdioTransport
+
+        return StdioTransport(command="python", args=["-m", "jesse_mcp"])
+    except ImportError:
+        raise ImportError("FastMCP not installed")
+
+
 class E2ETestSuite:
     """Comprehensive end-to-end test suite"""
 
@@ -58,7 +68,7 @@ class E2ETestSuite:
         except ImportError:
             pytest.skip("FastMCP not installed")
 
-        async with Client("stdio", command=["python", "-m", "jesse_mcp"]) as client:
+        async with Client(get_client_transport()) as client:
             tools = await client.list_tools()
             total_tools = len(tools)
             tool_names = {t["name"] for t in tools}
@@ -135,7 +145,7 @@ class E2ETestSuite:
         passed = 0
         for tool_name, args, description in phase1_tools:
             try:
-                async with Client("stdio", command=["python", "-m", "jesse_mcp"]) as client:
+                async with Client(get_client_transport()) as client:
                     result = await client.call_tool(tool_name, args)
                     has_error = "error" in result and result["error"] is not None
                     status = "✅" if not has_error else "❌"
@@ -159,7 +169,7 @@ class E2ETestSuite:
 
         # Test optimization workflow
         try:
-            async with Client("stdio", command=["python", "-m", "jesse_mcp"]) as client:
+            async with Client(get_client_transport()) as client:
                 # Step 1: Get strategies
                 strategies = await client.call_tool("strategy_list", {})
 
@@ -172,11 +182,15 @@ class E2ETestSuite:
                         "timeframe": "1h",
                         "start_date": "2023-01-01",
                         "end_date": "2023-01-31",
-                        "param_space": {"param1": {"type": "float", "min": 0, "max": 1}},
+                        "param_space": {
+                            "param1": {"type": "float", "min": 0, "max": 1}
+                        },
                     },
                 )
 
-                workflow_success = "error" not in strategies or strategies.get("strategies", [])
+                workflow_success = "error" not in strategies or strategies.get(
+                    "strategies", []
+                )
 
                 status = "✅" if workflow_success else "❌"
                 print(f"  {status} Optimization workflow")
@@ -220,7 +234,7 @@ class E2ETestSuite:
         passed = 0
         for test in error_tests:
             try:
-                async with Client("stdio", command=["python", "-m", "jesse_mcp"]) as client:
+                async with Client(get_client_transport()) as client:
                     result = await client.call_tool(test["tool"], test["args"])
                     has_error = "error" in result and result["error"] is not None
 
@@ -251,13 +265,13 @@ class E2ETestSuite:
 
         # Test tool discovery performance
         start_time = time.time()
-        async with Client("stdio", command=["python", "-m", "jesse_mcp"]) as client:
+        async with Client(get_client_transport()) as client:
             tools = await client.list_tools()
         discovery_time = time.time() - start_time
 
         # Test simple tool call performance
         start_time = time.time()
-        async with Client("stdio", command=["python", "-m", "jesse_mcp"]) as client:
+        async with Client(get_client_transport()) as client:
             await client.call_tool("strategy_list", {})
         call_time = time.time() - start_time
 
@@ -288,7 +302,9 @@ class E2ETestSuite:
 
         passed = sum(1 for _, result in self.results)
         total = len(self.results)
-        overall_status = "✅ ALL TESTS PASSED" if passed == total else "❌ SOME TESTS FAILED"
+        overall_status = (
+            "✅ ALL TESTS PASSED" if passed == total else "❌ SOME TESTS FAILED"
+        )
         print(f"\nOverall: {overall_status} ({passed}/{total})")
 
         return passed == total

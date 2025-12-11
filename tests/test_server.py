@@ -14,10 +14,12 @@ async def test_tools_list():
     """Test that all 17 tools are discoverable"""
     try:
         from fastmcp import Client
+        from fastmcp.client.transports import StdioTransport
     except ImportError:
         pytest.skip("FastMCP not installed")
 
-    async with Client("stdio", command=["python", "-m", "jesse_mcp"]) as client:
+    transport = StdioTransport(command="python", args=["-m", "jesse_mcp"])
+    async with Client(transport) as client:
         tools = await client.list_tools()
 
         # Verify count
@@ -48,9 +50,9 @@ async def test_tools_list():
             "factor_analysis",
             "regime_detector",
         }
-        assert (
-            expected_tools == tool_names
-        ), f"Tool mismatch. Expected: {expected_tools}, Got: {tool_names}"
+        assert expected_tools == tool_names, (
+            f"Tool mismatch. Expected: {expected_tools}, Got: {tool_names}"
+        )
 
         print(f"✅ All {len(tools)} tools discovered successfully")
 
@@ -60,10 +62,12 @@ async def test_backtest_tool():
     """Test backtest tool execution"""
     try:
         from fastmcp import Client
+        from fastmcp.client.transports import StdioTransport
     except ImportError:
         pytest.skip("FastMCP not installed")
 
-    async with Client("stdio", command=["python", "-m", "jesse_mcp"]) as client:
+    transport = StdioTransport(command="python", args=["-m", "jesse_mcp"])
+    async with Client(transport) as client:
         result = await client.call_tool(
             "backtest",
             {
@@ -86,10 +90,12 @@ async def test_strategy_list_tool():
     """Test strategy_list tool"""
     try:
         from fastmcp import Client
+        from fastmcp.client.transports import StdioTransport
     except ImportError:
         pytest.skip("FastMCP not installed")
 
-    async with Client("stdio", command=["python", "-m", "jesse_mcp"]) as client:
+    transport = StdioTransport(command="python", args=["-m", "jesse_mcp"])
+    async with Client(transport) as client:
         result = await client.call_tool("strategy_list", {})
 
         assert isinstance(result, dict), f"Expected dict, got {type(result)}"
@@ -101,10 +107,12 @@ async def test_optimize_tool():
     """Test optimize tool (async)"""
     try:
         from fastmcp import Client
+        from fastmcp.client.transports import StdioTransport
     except ImportError:
         pytest.skip("FastMCP not installed")
 
-    async with Client("stdio", command=["python", "-m", "jesse_mcp"]) as client:
+    transport = StdioTransport(command="python", args=["-m", "jesse_mcp"])
+    async with Client(transport) as client:
         result = await client.call_tool(
             "optimize",
             {
@@ -126,10 +134,12 @@ async def test_monte_carlo_tool():
     """Test monte_carlo tool"""
     try:
         from fastmcp import Client
+        from fastmcp.client.transports import StdioTransport
     except ImportError:
         pytest.skip("FastMCP not installed")
 
-    async with Client("stdio", command=["python", "-m", "jesse_mcp"]) as client:
+    transport = StdioTransport(command="python", args=["-m", "jesse_mcp"])
+    async with Client(transport) as client:
         mock_result = {"trades": [], "metrics": {}}
         result = await client.call_tool(
             "monte_carlo",
@@ -148,10 +158,12 @@ async def test_invalid_tool():
     """Test calling non-existent tool"""
     try:
         from fastmcp import Client
+        from fastmcp.client.transports import StdioTransport
     except ImportError:
         pytest.skip("FastMCP not installed")
 
-    async with Client("stdio", command=["python", "-m", "jesse_mcp"]) as client:
+    transport = StdioTransport(command="python", args=["-m", "jesse_mcp"])
+    async with Client(transport) as client:
         # Should raise or return error
         try:
             result = await client.call_tool("nonexistent_tool", {})
