@@ -75,24 +75,51 @@ class JesseRESTClient:
         try:
             logger.info(f"Starting backtest via REST API: {strategy} on {symbol}")
 
-            payload = {
-                "strategy": strategy,
-                "symbol": symbol,
-                "timeframe": timeframe,
-                "start_date": start_date,
-                "end_date": end_date,
-                "exchange": exchange,
+            import uuid
+
+            # Format routes and data_routes as Jesse expects
+            routes = [
+                {
+                    "exchange": exchange,
+                    "strategy": strategy,
+                    "symbol": symbol,
+                    "timeframe": timeframe,
+                }
+            ]
+
+            data_routes = [
+                {
+                    "exchange": exchange,
+                    "symbol": symbol,
+                    "timeframe": timeframe,
+                }
+            ]
+
+            # Format config as Jesse expects
+            config = {
                 "starting_balance": starting_balance,
                 "fee": fee,
                 "futures_leverage": leverage,
                 "type": exchange_type,
-                "include_trades": include_trades,
-                "include_equity_curve": include_equity_curve,
-                "include_logs": include_logs,
+                "warm_up_candles": 240,
             }
 
-            if hyperparameters:
-                payload["hyperparameters"] = hyperparameters
+            payload = {
+                "id": str(uuid.uuid4()),
+                "exchange": exchange,
+                "routes": routes,
+                "data_routes": data_routes,
+                "config": config,
+                "start_date": start_date,
+                "finish_date": end_date,
+                "debug_mode": include_logs,
+                "export_csv": False,
+                "export_json": include_trades,
+                "export_chart": False,
+                "export_tradingview": False,
+                "fast_mode": True,
+                "benchmark": False,
+            }
 
             response = self.session.post(f"{self.base_url}/backtest", json=payload)
             response.raise_for_status()
