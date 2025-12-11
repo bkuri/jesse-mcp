@@ -42,27 +42,22 @@ def _check_jesse_ntfy_available() -> bool:
         return False
 
 
+# Check if Jesse API is accessible via localhost:8000
+# This allows jesse-mcp to work without importing Jesse dependencies
+JESSE_AVAILABLE = False
+JESSE_ERROR = None
+JESSE_API_URL = "http://localhost:8000"
+
 try:
-    from jesse import research
-    from jesse.strategies import Strategy
-    import jesse.helpers as jh
+    import requests
 
-    JESSE_AVAILABLE = True
-    logger.info("✅ Jesse framework imported successfully")
-except ImportError as e:
-    JESSE_AVAILABLE = False
+    response = requests.get(f"{JESSE_API_URL}/", timeout=2)
+    if response.status_code == 200:
+        JESSE_AVAILABLE = True
+        logger.info("✅ Jesse API found at http://localhost:8000")
+except Exception as e:
     JESSE_ERROR = str(e)
-    logger.warning(f"⚠️ Jesse not available: {e}")
-
-    # Check if it's just missing jesse_rust and we can work around it
-    if "jesse_rust" in str(e):
-        logger.info("🔄 jesse_rust missing - checking for jesse-ntfy API")
-        # Try to use jesse-ntfy API instead
-        if _check_jesse_ntfy_available():
-            JESSE_AVAILABLE = True
-            logger.info("✅ Jesse integration layer loaded (via jesse-ntfy API)")
-        else:
-            logger.warning("⚠️ jesse-ntfy API not available")
+    logger.warning(f"⚠️ Jesse API not accessible at {JESSE_API_URL}: {e}")
 
 
 class JesseIntegrationError(Exception):
