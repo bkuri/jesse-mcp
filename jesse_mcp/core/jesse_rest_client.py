@@ -6,7 +6,9 @@ allowing full interactivity with Jesse without requiring local module imports.
 
 Configuration (via MetaMCP MCP Servers panel):
 - JESSE_URL: URL to Jesse API (default: http://server2:8000)
-- JESSE_API_TOKEN: API authentication token/password
+- JESSE_PASSWORD: Jesse UI login password (for /auth/login endpoint)
+- JESSE_API_TOKEN: Pre-generated API token from Jesse UI (alternative to password)
+  Choose one of JESSE_PASSWORD or JESSE_API_TOKEN
 """
 
 import os
@@ -17,37 +19,60 @@ from typing import Dict, Any, Optional
 logger = logging.getLogger("jesse-mcp.rest-client")
 
 # Get Jesse API configuration from environment
-# Note: Jesse runs on server2, not localhost. Update via MetaMCP env vars.
 JESSE_URL = os.getenv("JESSE_URL", "http://server2:8000")
+JESSE_PASSWORD = os.getenv("JESSE_PASSWORD", "")
 JESSE_API_TOKEN = os.getenv("JESSE_API_TOKEN", "")
 JESSE_API_BASE = JESSE_URL
 
 
 class JesseRESTClient:
-    """Client for interacting with Jesse via REST API"""
+    """Client for interacting with Jesse via REST API
+
+    Supports two authentication methods:
+    1. JESSE_PASSWORD: Login via /auth/login endpoint
+    2. JESSE_API_TOKEN: Use pre-generated token directly
+    """
 
     def __init__(
-        self, base_url: str = JESSE_API_BASE, api_token: str = JESSE_API_TOKEN
+        self,
+        base_url: str = JESSE_API_BASE,
+        password: str = JESSE_PASSWORD,
+        api_token: str = JESSE_API_TOKEN,
     ):
         self.base_url = base_url
-        self.api_password = api_token  # api_token is actually the password for Jesse
         self.session = requests.Session()
         self.auth_token = None
 
-        # Authenticate with Jesse to get a session token
-        if self.api_password:
-            self._authenticate()
+        # Try authentication with provided credentials
+        if api_token:
+            # Use pre-generated API token directly
+            self._authenticate_with_token(api_token)
+        elif password:
+            # Login with password to get a session token
+            self._authenticate_with_password(password)
         else:
-            logger.warning("⚠️ No JESSE_API_TOKEN provided - requests will fail")
+            logger.warning(
+                "⚠️ No JESSE_PASSWORD or JESSE_API_TOKEN provided - requests will fail"
+            )
 
         self._verify_connection()
 
-    def _authenticate(self):
-        """Authenticate with Jesse API to obtain a session token"""
+    def _authenticate_with_token(self, token: str):
+        """Use a pre-generated API token directly"""
+        try:
+            self.auth_token = token
+            # Use lowercase 'authorization' header with raw token (no Bearer prefix)
+            self.session.headers.update({"authorization": self.auth_token})
+            logger.info("✅ Authenticated with Jesse API (using pre-generated token)")
+        except Exception as e:
+            logger.error(f"❌ Token configuration failed: {e}")
+
+    def _authenticate_with_password(self, password: str):
+        """Authenticate with Jesse API password to obtain a session token"""
         try:
             response = requests.post(
                 f"{self.base_url}/auth/login",
-                json={"password": self.api_password},
+                json={"password": password},
                 timeout=10,
             )
             response.raise_for_status()
@@ -56,7 +81,7 @@ class JesseRESTClient:
             if self.auth_token:
                 # Use lowercase 'authorization' header with raw token (no Bearer prefix)
                 self.session.headers.update({"authorization": self.auth_token})
-                logger.info("✅ Authenticated with Jesse API")
+                logger.info("✅ Authenticated with Jesse API (via login)")
             else:
                 logger.error("❌ No auth_token in login response")
         except Exception as e:
