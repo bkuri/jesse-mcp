@@ -1,17 +1,9 @@
 #!/bin/bash
-# Wrapper script to run jesse-mcp with proper venv activation
-# This ensures all dependencies (including fastmcp) are available
+# Wrapper script to run jesse-mcp with proper PYTHONPATH
+# Avoids issues with venv's bundled Python executable
 
-# Check if running in MetaMCP container
-if [ -d "/mnt/jesse-mcp/.venv" ]; then
-    # Use venv from mounted volume
-    source /mnt/jesse-mcp/.venv/bin/activate
-    exec python3 -m jesse_mcp "$@"
-elif [ -d ".venv" ]; then
-    # Use local venv
-    source .venv/bin/activate
-    exec python3 -m jesse_mcp "$@"
-else
-    # Fall back to system python
-    exec python3 -m jesse_mcp "$@"
-fi
+# Ensure PYTHONPATH includes jesse-mcp directory
+export PYTHONPATH="/mnt/jesse-mcp:/mnt/autocli:${PYTHONPATH}"
+
+# Use system Python directly (avoids venv Python executable issues)
+exec /usr/bin/python3 -m jesse_mcp "$@"
