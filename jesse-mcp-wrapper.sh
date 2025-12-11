@@ -1,9 +1,8 @@
 #!/bin/bash
-# Wrapper script to run jesse-mcp with proper PYTHONPATH
-# Avoids issues with venv's bundled Python executable
+# Wrapper script to run jesse-mcp with proper PYTHONPATH and dependencies
 
-# Ensure PYTHONPATH includes jesse-mcp directory
-export PYTHONPATH="/mnt/jesse-mcp:/mnt/autocli:${PYTHONPATH}"
+# Add venv's site-packages to PYTHONPATH so dependencies are available
+export PYTHONPATH="/mnt/jesse-mcp/.venv/lib/python3.13/site-packages:/mnt/jesse-mcp:/mnt/autocli:${PYTHONPATH}"
 
-# Use system Python directly (avoids venv Python executable issues)
-exec /usr/bin/python3 -m jesse_mcp "$@"
+# Use venv's Python directly which has all dependencies installed
+exec /mnt/jesse-mcp/.venv/bin/python3 -m jesse_mcp "$@"
