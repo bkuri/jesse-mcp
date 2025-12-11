@@ -19,6 +19,7 @@ setup(
     python_requires=">=3.10",
     install_requires=[
         "mcp>=1.0.0",
+        "fastmcp>=0.3.0",
         "jedi>=0.19.0",
         "numpy>=1.24.0",
         "pandas>=2.0.0",
