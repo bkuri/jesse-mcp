@@ -82,8 +82,15 @@ class JesseWrapper:
             raise JesseIntegrationError("Jesse framework not available")
 
         self.jesse_path = JESSE_PATH
-        self.strategies_path = os.path.join(JESSE_PATH, "strategies")
-        logger.info(f"Initialized JesseWrapper with path: {self.jesse_path}")
+        # Only set strategies_path if jesse_path is available (local installation)
+        # When using REST API, this path may not be needed
+        if JESSE_PATH:
+            self.strategies_path = os.path.join(JESSE_PATH, "strategies")
+        else:
+            self.strategies_path = None
+        logger.info(
+            f"Initialized JesseWrapper (path: {self.jesse_path}, REST API: {JESSE_AVAILABLE})"
+        )
 
     def backtest(
         self,
@@ -207,8 +214,8 @@ class JesseWrapper:
             logger.info("Listing available strategies")
             strategies = []
 
-            if not os.path.exists(self.strategies_path):
-                logger.warning(f"Strategies path not found: {self.strategies_path}")
+            if not self.strategies_path or not os.path.exists(self.strategies_path):
+                logger.warning(f"Strategies path not available (using REST API)")
                 return {"strategies": [], "count": 0}
 
             for item in os.listdir(self.strategies_path):
@@ -242,6 +249,11 @@ class JesseWrapper:
         """
         try:
             logger.info(f"Reading strategy: {name}")
+
+            if not self.strategies_path:
+                raise JesseIntegrationError(
+                    f"Strategy path not available (using REST API)"
+                )
 
             strategy_path = os.path.join(self.strategies_path, name, "__init__.py")
 
