@@ -47,6 +47,7 @@ def _check_jesse_ntfy_available() -> bool:
 JESSE_AVAILABLE = False
 JESSE_ERROR = None
 JESSE_API_URL = "http://localhost:8000"
+JESSE_RESEARCH_AVAILABLE = False  # Track if we can import Jesse's research module
 
 try:
     import requests
@@ -58,6 +59,19 @@ try:
 except Exception as e:
     JESSE_ERROR = str(e)
     logger.warning(f"⚠️ Jesse API not accessible at {JESSE_API_URL}: {e}")
+
+# Try to import Jesse's research module (only available with local installation)
+if JESSE_PATH:
+    try:
+        # This will fail if Jesse dependencies are not installed
+        import jesse.helpers as jh
+        from jesse import research
+
+        JESSE_RESEARCH_AVAILABLE = True
+        logger.info("✅ Jesse research module available for local operations")
+    except ImportError as e:
+        JESSE_RESEARCH_AVAILABLE = False
+        logger.warning(f"⚠️ Jesse research module not available: {e}")
 
 
 class JesseIntegrationError(Exception):
@@ -135,10 +149,10 @@ class JesseWrapper:
             logger.info(f"Starting backtest: {strategy} on {symbol} ({timeframe})")
 
             # Check if we have access to Jesse's research module (requires local installation)
-            if not JESSE_PATH:
+            if not JESSE_RESEARCH_AVAILABLE:
                 return {
-                    "error": "Backtest requires local Jesse installation",
-                    "detail": "This tool requires access to Jesse's research module which is only available when Jesse is installed locally. Use the Jesse API backtest endpoint instead.",
+                    "error": "Backtest requires local Jesse research module",
+                    "detail": "This tool requires Jesse.research module which needs full Jesse installation. Use the Jesse REST API /backtest endpoint instead.",
                     "success": False,
                 }
 
@@ -358,10 +372,10 @@ class JesseWrapper:
             logger.info(f"Importing candles: {exchange} {symbol} from {start_date}")
 
             # Check if we have access to Jesse's research module (requires local installation)
-            if not JESSE_PATH:
+            if not JESSE_RESEARCH_AVAILABLE:
                 return {
-                    "error": "Import candles requires local Jesse installation",
-                    "detail": "This tool requires access to Jesse's research module which is only available when Jesse is installed locally. Use the Jesse API import endpoint instead.",
+                    "error": "Import candles requires local Jesse research module",
+                    "detail": "This tool requires Jesse.research module which needs full Jesse installation. Use the Jesse REST API /exchange/import-candles endpoint instead.",
                     "success": False,
                 }
 
