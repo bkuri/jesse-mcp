@@ -12,7 +12,7 @@ import pytest
 # Add current directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from jesse_mcp.phase3.optimizer import get_optimizer
+from jesse_mcp.optimizer import get_optimizer
 
 
 @pytest.mark.asyncio
@@ -118,9 +118,7 @@ async def test_walk_forward():
 
         if result["overall"]:
             overall = result["overall"]
-            print(
-                f"  Positive Periods: {overall['positive_periods']}/{overall['total_periods']}"
-            )
+            print(f"  Positive Periods: {overall['positive_periods']}/{overall['total_periods']}")
             print(f"  Average Degradation: {overall['average_degradation']:.2%}")
             print(f"  Overfitting Indicator: {overall['overfitting_indicator']}")
 

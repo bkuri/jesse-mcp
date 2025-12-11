@@ -1,5 +1,5 @@
 """
-Phase 4 Risk Analysis Tools Implementation
+Risk Analysis Tools Implementation
 
 Advanced Monte Carlo simulation, Value at Risk calculations, stress testing, and comprehensive risk reporting.
 Implements monte_carlo(), var_calculation(), stress_test(), and risk_report().
@@ -15,13 +15,13 @@ import numpy as np
 
 # Import existing optimizer
 try:
-    from jesse_mcp.phase3.optimizer import Phase3Optimizer
+    from jesse_mcp.optimizer import Phase3Optimizer
 
     PHASE3_AVAILABLE = True
 except ImportError:
     PHASE3_AVAILABLE = False
 
-logger = logging.getLogger("jesse-mcp.phase4")
+logger = logging.getLogger("jesse-mcp.risk_analyzer")
 
 
 class Phase4RiskAnalyzer:
@@ -90,17 +90,13 @@ class Phase4RiskAnalyzer:
         for i in range(simulations):
             # Resample returns based on method
             if resample_method == "bootstrap":
-                sampled_returns = np.random.choice(
-                    returns, size=len(returns), replace=True
-                )
+                sampled_returns = np.random.choice(returns, size=len(returns), replace=True)
             elif resample_method == "block_bootstrap":
                 sampled_returns = self._block_bootstrap(returns, block_size)
             elif resample_method == "stationary_bootstrap":
                 sampled_returns = self._stationary_bootstrap(returns)
             else:
-                sampled_returns = np.random.choice(
-                    returns, size=len(returns), replace=True
-                )
+                sampled_returns = np.random.choice(returns, size=len(returns), replace=True)
 
             # Generate path
             path_value = 10000  # Starting value
@@ -126,13 +122,9 @@ class Phase4RiskAnalyzer:
         # Calculate statistics and confidence intervals
         final_value_stats = self._calculate_distribution_stats(final_values)
         drawdown_stats = (
-            self._calculate_distribution_stats(max_drawdowns)
-            if include_drawdowns
-            else {}
+            self._calculate_distribution_stats(max_drawdowns) if include_drawdowns else {}
         )
-        return_stats = (
-            self._calculate_distribution_stats(total_returns) if include_returns else {}
-        )
+        return_stats = self._calculate_distribution_stats(total_returns) if include_returns else {}
 
         confidence_intervals = {}
         for level in confidence_levels:
@@ -151,8 +143,7 @@ class Phase4RiskAnalyzer:
             "drawdown_stats": drawdown_stats,
             "return_stats": return_stats,
             "confidence_intervals": confidence_intervals,
-            "probability_of_profit": len([v for v in final_values if v > 10000])
-            / simulations,
+            "probability_of_profit": len([v for v in final_values if v > 10000]) / simulations,
             "execution_time": round(execution_time, 2),
             "use_mock": self.use_mock,
         }
@@ -292,38 +283,28 @@ class Phase4RiskAnalyzer:
             if scenario == "market_crash":
                 stressed_returns = self._apply_market_crash(returns, shock_magnitude)
             elif scenario == "volatility_spike":
-                stressed_returns = self._apply_volatility_spike(
-                    returns, volatility_multiplier
-                )
+                stressed_returns = self._apply_volatility_spike(returns, volatility_multiplier)
             elif scenario == "correlation_breakdown":
-                stressed_returns = self._apply_correlation_breakdown(
-                    returns, correlation_shift
-                )
+                stressed_returns = self._apply_correlation_breakdown(returns, correlation_shift)
             elif custom_scenarios and scenario in custom_scenarios:
-                stressed_returns = self._apply_custom_scenario(
-                    returns, custom_scenarios[scenario]
-                )
+                stressed_returns = self._apply_custom_scenario(returns, custom_scenarios[scenario])
             else:
                 stressed_returns = self._apply_market_crash(returns, shock_magnitude)
 
             # Calculate stressed performance
             stressed_equity = self._generate_equity_curve(stressed_returns)
             max_dd = self._calculate_max_drawdown(stressed_equity)
-            recovery_times = self._calculate_recovery_times(
-                stressed_equity, recovery_periods
-            )
+            recovery_times = self._calculate_recovery_times(stressed_equity, recovery_periods)
 
             stress_results[scenario] = {
                 "scenario": scenario,
-                "shock_applied": shock_magnitude
-                if scenario == "market_crash"
-                else volatility_multiplier,
+                "shock_applied": (
+                    shock_magnitude if scenario == "market_crash" else volatility_multiplier
+                ),
                 "max_drawdown": max_dd,
                 "final_return": stressed_returns[-1] if stressed_returns else 0,
                 "recovery_analysis": recovery_times,
-                "stressed_returns_sample": stressed_returns[
-                    :100
-                ],  # First 100 for analysis
+                "stressed_returns_sample": stressed_returns[:100],  # First 100 for analysis
                 "base_performance": {
                     "max_drawdown": backtest_result.get("max_drawdown", 0),
                     "total_return": backtest_result.get("total_return", 0),
@@ -491,9 +472,7 @@ class Phase4RiskAnalyzer:
         return intervals
 
     # Helper methods for VaR
-    def _aggregate_returns(
-        self, returns: List[float], horizon_days: int
-    ) -> List[float]:
+    def _aggregate_returns(self, returns: List[float], horizon_days: int) -> List[float]:
         """Aggregate returns for specified time horizon"""
         if horizon_days == 1:
             return returns
@@ -506,9 +485,7 @@ class Phase4RiskAnalyzer:
 
         return aggregated
 
-    def _historical_var(
-        self, returns: List[float], confidence: float
-    ) -> Tuple[float, float]:
+    def _historical_var(self, returns: List[float], confidence: float) -> Tuple[float, float]:
         """Historical VaR calculation"""
         if not returns:
             return 0, 0
@@ -521,9 +498,7 @@ class Phase4RiskAnalyzer:
 
         return float(var), float(es)
 
-    def _parametric_var(
-        self, returns: List[float], confidence: float
-    ) -> Tuple[float, float]:
+    def _parametric_var(self, returns: List[float], confidence: float) -> Tuple[float, float]:
         """Parametric VaR assuming normal distribution"""
         if not returns:
             return 0, 0
@@ -575,9 +550,7 @@ class Phase4RiskAnalyzer:
         }
 
     # Helper methods for stress testing
-    def _apply_market_crash(
-        self, returns: List[float], shock_magnitude: float
-    ) -> List[float]:
+    def _apply_market_crash(self, returns: List[float], shock_magnitude: float) -> List[float]:
         """Apply market crash scenario"""
         # Apply sudden shock to first part of returns
         crash_point = len(returns) // 4  # Apply at 25% point
@@ -588,9 +561,7 @@ class Phase4RiskAnalyzer:
 
         return stressed_returns
 
-    def _apply_volatility_spike(
-        self, returns: List[float], multiplier: float
-    ) -> List[float]:
+    def _apply_volatility_spike(self, returns: List[float], multiplier: float) -> List[float]:
         """Apply volatility spike scenario"""
         returns_array = np.array(returns)
         base_std = np.std(returns_array)
@@ -691,16 +662,12 @@ class Phase4RiskAnalyzer:
 
         return comparison
 
-    def _assess_stress_resilience(
-        self, stress_results: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _assess_stress_resilience(self, stress_results: Dict[str, Any]) -> Dict[str, Any]:
         """Assess overall stress resilience"""
         if not stress_results:
             return {}
 
-        max_drawdowns = [
-            results.get("max_drawdown", 0) for results in stress_results.values()
-        ]
+        max_drawdowns = [results.get("max_drawdown", 0) for results in stress_results.values()]
         avg_max_dd = np.mean(max_drawdowns)
         worst_max_dd = max(max_drawdowns)
 
@@ -726,9 +693,7 @@ class Phase4RiskAnalyzer:
             return "Poor"
 
     # Helper methods for risk report
-    def _calculate_base_risk_metrics(
-        self, backtest_result: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _calculate_base_risk_metrics(self, backtest_result: Dict[str, Any]) -> Dict[str, Any]:
         """Calculate base risk metrics"""
         return {
             "total_return": backtest_result.get("total_return", 0),
@@ -737,9 +702,7 @@ class Phase4RiskAnalyzer:
             "win_rate": backtest_result.get("win_rate", 0),
             "volatility": self._calculate_volatility(backtest_result),
             "var_95": self._calculate_simple_var(backtest_result, 0.95),
-            "risk_adjusted_return": self._calculate_risk_adjusted_return(
-                backtest_result
-            ),
+            "risk_adjusted_return": self._calculate_risk_adjusted_return(backtest_result),
         }
 
     def _calculate_volatility(self, backtest_result: Dict[str, Any]) -> float:
@@ -753,9 +716,7 @@ class Phase4RiskAnalyzer:
 
         return float(np.std(returns) * np.sqrt(252))  # Annualized
 
-    def _calculate_simple_var(
-        self, backtest_result: Dict[str, Any], confidence: float
-    ) -> float:
+    def _calculate_simple_var(self, backtest_result: Dict[str, Any], confidence: float) -> float:
         """Simple VaR calculation from returns"""
         if "equity_curve" not in backtest_result:
             return 0
@@ -845,9 +806,7 @@ class Phase4RiskAnalyzer:
         risk_score = risk_assessment.get("total_risk_score", 50)
 
         if risk_score > 70:
-            recommendations.append(
-                "Consider implementing position sizing to reduce risk exposure"
-            )
+            recommendations.append("Consider implementing position sizing to reduce risk exposure")
             recommendations.append("Add stop-loss mechanisms to limit maximum losses")
 
         if risk_score > 50:
@@ -855,9 +814,7 @@ class Phase4RiskAnalyzer:
             recommendations.append("Consider reducing leverage or position size")
 
         if risk_score > 30:
-            recommendations.append(
-                "Implement dynamic risk adjustment based on market volatility"
-            )
+            recommendations.append("Implement dynamic risk adjustment based on market volatility")
 
         base_metrics = report.get("base_metrics", {})
         if base_metrics.get("sharpe_ratio", 0) < 1.0:
@@ -869,9 +826,7 @@ class Phase4RiskAnalyzer:
             recommendations.append("Add drawdown controls and position reduction rules")
 
         if not recommendations:
-            recommendations.append(
-                "Risk profile appears well-balanced - continue monitoring"
-            )
+            recommendations.append("Risk profile appears well-balanced - continue monitoring")
 
         return recommendations
 
@@ -883,13 +838,9 @@ class Phase4RiskAnalyzer:
                 "total_return": report.get("base_metrics", {}).get("total_return", 0),
                 "sharpe_ratio": report.get("base_metrics", {}).get("sharpe_ratio", 0),
                 "max_drawdown": report.get("base_metrics", {}).get("max_drawdown", 0),
-                "risk_rating": report.get("risk_assessment", {}).get(
-                    "risk_rating", "N/A"
-                ),
+                "risk_rating": report.get("risk_assessment", {}).get("risk_rating", "N/A"),
             },
-            "risk_level": report.get("risk_assessment", {}).get(
-                "risk_level", "Unknown"
-            ),
+            "risk_level": report.get("risk_assessment", {}).get("risk_level", "Unknown"),
             "top_recommendations": report.get("recommendations", [])[:3],
         }
 
@@ -899,13 +850,9 @@ class Phase4RiskAnalyzer:
             "report_type": "Detailed Analysis",
             "base_metrics": report.get("base_metrics", {}),
             "risk_assessment": report.get("risk_assessment", {}),
-            "monte_carlo_summary": self._summarize_monte_carlo(
-                report.get("monte_carlo", {})
-            ),
+            "monte_carlo_summary": self._summarize_monte_carlo(report.get("monte_carlo", {})),
             "var_summary": self._summarize_var_analysis(report.get("var_analysis", {})),
-            "stress_test_summary": self._summarize_stress_test(
-                report.get("stress_test", {})
-            ),
+            "stress_test_summary": self._summarize_stress_test(report.get("stress_test", {})),
             "all_recommendations": report.get("recommendations", []),
         }
 
@@ -926,9 +873,7 @@ class Phase4RiskAnalyzer:
             "recommendations": report.get("recommendations", [])[:5],
         }
 
-    def _summarize_monte_carlo(
-        self, monte_carlo_result: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _summarize_monte_carlo(self, monte_carlo_result: Dict[str, Any]) -> Dict[str, Any]:
         """Summarize Monte Carlo results"""
         if not monte_carlo_result:
             return {}

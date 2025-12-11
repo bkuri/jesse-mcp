@@ -66,8 +66,7 @@ class MockJesseWrapper:
 
         # Generate realistic mock results
         days = (
-            datetime.strptime(end_date, "%Y-%m-%d")
-            - datetime.strptime(start_date, "%Y-%m-%d")
+            datetime.strptime(end_date, "%Y-%m-%d") - datetime.strptime(start_date, "%Y-%m-%d")
         ).days
 
         # Base performance varies by strategy
@@ -92,9 +91,7 @@ class MockJesseWrapper:
         trades = self._generate_mock_trades(num_trades, win_rate)
 
         # Generate mock equity curve
-        equity_curve = self._generate_mock_equity_curve(
-            days, total_return, max_drawdown
-        )
+        equity_curve = self._generate_mock_equity_curve(days, total_return, max_drawdown)
 
         return {
             "strategy": strategy_name,
@@ -165,9 +162,7 @@ class {strategy_name}:
 
         # Mock additional validation
         has_class = "class " in strategy_code
-        has_methods = any(
-            method in strategy_code for method in ["should_long", "should_short"]
-        )
+        has_methods = any(method in strategy_code for method in ["should_long", "should_short"])
 
         if not has_class:
             return {
@@ -187,9 +182,7 @@ class {strategy_name}:
             "valid": True,
             "error": None,
             "line": None,
-            "warnings": [
-                "Using mock validation - real Jesse validation may be stricter"
-            ],
+            "warnings": ["Using mock validation - real Jesse validation may be stricter"],
         }
 
     def import_candles(
@@ -203,8 +196,7 @@ class {strategy_name}:
 
         # Calculate number of candles
         days = (
-            datetime.strptime(end_date, "%Y-%m-%d")
-            - datetime.strptime(start_date, "%Y-%m-%d")
+            datetime.strptime(end_date, "%Y-%m-%d") - datetime.strptime(start_date, "%Y-%m-%d")
         ).days
 
         timeframe_minutes = {
@@ -234,9 +226,7 @@ class {strategy_name}:
             "download_time": round(np.random.uniform(1.0, 5.0), 2),
         }
 
-    def _generate_mock_trades(
-        self, num_trades: int, win_rate: float
-    ) -> List[Dict[str, Any]]:
+    def _generate_mock_trades(self, num_trades: int, win_rate: float) -> List[Dict[str, Any]]:
         """Generate realistic mock trades"""
         trades = []
         for i in range(num_trades):
@@ -257,9 +247,9 @@ class {strategy_name}:
                 {
                     "id": i + 1,
                     "entry_date": trade_date.strftime("%Y-%m-%d %H:%M:%S"),
-                    "exit_date": (
-                        trade_date + timedelta(hours=random.randint(1, 48))
-                    ).strftime("%Y-%m-%d %H:%M:%S"),
+                    "exit_date": (trade_date + timedelta(hours=random.randint(1, 48))).strftime(
+                        "%Y-%m-%d %H:%M:%S"
+                    ),
                     "entry_price": entry_price,
                     "exit_price": exit_price,
                     "quantity": round(np.random.uniform(0.1, 2.0), 4),
@@ -295,9 +285,7 @@ class {strategy_name}:
 
             equity_points.append(
                 {
-                    "date": (datetime.now() - timedelta(days=days - day)).strftime(
-                        "%Y-%m-%d"
-                    ),
+                    "date": (datetime.now() - timedelta(days=days - day)).strftime("%Y-%m-%d"),
                     "equity": round(current_equity, 2),
                     "return": round(daily_return * 100, 4),
                     "drawdown": round(current_drawdown * 100, 4),
@@ -306,9 +294,7 @@ class {strategy_name}:
 
         return equity_points
 
-    def _generate_mock_candles(
-        self, num_candles: int, base_price: float
-    ) -> List[Dict[str, Any]]:
+    def _generate_mock_candles(self, num_candles: int, base_price: float) -> List[Dict[str, Any]]:
         """Generate realistic mock candle data"""
         candles = []
         current_price = base_price
@@ -328,9 +314,7 @@ class {strategy_name}:
             candles.append(
                 {
                     "timestamp": int(
-                        (
-                            datetime.now() - timedelta(minutes=num_candles - i)
-                        ).timestamp()
+                        (datetime.now() - timedelta(minutes=num_candles - i)).timestamp()
                     ),
                     "open": round(open_price, 2),
                     "high": round(high_price, 2),

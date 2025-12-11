@@ -3,32 +3,24 @@
 Jesse MCP Server - CLI entry point
 
 Usage:
-    jesse-mcp                    # Start the server
-    jesse-mcp --help             # Show help
-    jesse-mcp --version          # Show version
+    jesse-mcp                                   # Start with stdio transport
+    jesse-mcp --transport http --port 8000     # Start with HTTP transport
+    jesse-mcp --version                        # Show version
+    jesse-mcp --help                           # Show help
 """
 
-import argparse
 import sys
-from jesse_mcp.server import JesseMCPServer
 
 
 def main():
     """Main entry point for CLI"""
-    parser = argparse.ArgumentParser(
-        description="Jesse MCP Server - Quantitative Trading Analysis"
-    )
-    parser.add_argument("--version", action="version", version="jesse-mcp 1.0.0")
+    try:
+        from jesse_mcp.server import main as server_main
 
-    args = parser.parse_args()
-
-    # Create and run server
-    server = JesseMCPServer()
-
-    # Run the async server
-    import asyncio
-
-    asyncio.run(server.run())
+        server_main()
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

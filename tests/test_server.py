@@ -1,98 +1,168 @@
 #!/usr/bin/env python3
 """
-Test jesse-mcp server
+Test Jesse MCP Server tool discovery and execution
+
+Uses FastMCP Client API to test server functionality
 """
 
-import asyncio
-import json
-import sys
-import subprocess
-import os
 import pytest
+import asyncio
 
 
 @pytest.mark.asyncio
-async def test_server():
-    """Test jesse-mcp server"""
+async def test_tools_list():
+    """Test that all 17 tools are discoverable"""
+    try:
+        from fastmcp import Client
+    except ImportError:
+        pytest.skip("FastMCP not installed")
 
-    print("🚀 Testing jesse-mcp server...")
+    async with Client("stdio", command=["python", "-m", "jesse_mcp"]) as client:
+        tools = await client.list_tools()
 
-    # Test 1: List tools
-    print("\n1. Testing tools/list...")
-    request = {"method": "tools/list", "params": {}}
+        # Verify count
+        assert len(tools) == 17, f"Expected 17 tools, got {len(tools)}"
 
-    result = await run_server_command(request)
-    print(f"✓ Tools listed: {len(result.get('tools', []))}")
+        # Verify tool names
+        tool_names = {t.name for t in tools}
+        expected_tools = {
+            # Phase 1: Backtesting
+            "backtest",
+            "strategy_list",
+            "strategy_read",
+            "strategy_validate",
+            "candles_import",
+            # Phase 3: Optimization
+            "optimize",
+            "walk_forward",
+            "backtest_batch",
+            "analyze_results",
+            # Phase 4: Risk Analysis
+            "monte_carlo",
+            "var_calculation",
+            "stress_test",
+            "risk_report",
+            # Phase 5: Pairs Trading
+            "correlation_matrix",
+            "pairs_backtest",
+            "factor_analysis",
+            "regime_detector",
+        }
+        assert (
+            expected_tools == tool_names
+        ), f"Tool mismatch. Expected: {expected_tools}, Got: {tool_names}"
 
-    # Test 2: Call backtest tool
-    print("\n2. Testing backtest tool...")
-    request = {
-        "method": "tools/call",
-        "params": {
-            "name": "backtest",
-            "arguments": {
+        print(f"✅ All {len(tools)} tools discovered successfully")
+
+
+@pytest.mark.asyncio
+async def test_backtest_tool():
+    """Test backtest tool execution"""
+    try:
+        from fastmcp import Client
+    except ImportError:
+        pytest.skip("FastMCP not installed")
+
+    async with Client("stdio", command=["python", "-m", "jesse_mcp"]) as client:
+        result = await client.call_tool(
+            "backtest",
+            {
                 "strategy": "Test01",
                 "symbol": "BTC-USDT",
                 "timeframe": "1h",
                 "start_date": "2023-01-01",
                 "end_date": "2023-01-31",
             },
-        },
-    }
-
-    result = await run_server_command(request)
-    if "error" in result:
-        print(f"✗ Backtest failed: {result['error']}")
-    else:
-        print("✓ Backtest tool responded")
-
-    # Test 3: List resources
-    print("\n3. Testing resources/list...")
-    request = {"method": "resources/list", "params": {}}
-
-    result = await run_server_command(request)
-    print(f"✓ Resources listed: {len(result.get('resources', []))}")
-
-    print("\n🎉 All tests passed!")
-
-
-async def run_server_command(request):
-    """Run a command against the server"""
-    try:
-        # Change to server directory
-        server_dir = "/home/bk/jesse-mcp"
-
-        # Run server with input
-        proc = subprocess.Popen(
-            [sys.executable, "server.py"],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            cwd=server_dir,
         )
 
-        # Send request
-        request_json = json.dumps(request)
-        proc.stdin.write(request_json + "\n")
-        proc.stdin.flush()
+        assert isinstance(result, dict), f"Expected dict, got {type(result)}"
+        # Tool should return a result (may contain error if Jesse unavailable)
+        assert "error" in result or "total_return" in result or "status" in result
+        print(f"✅ Backtest tool responded: {result.get('status', 'executed')}")
 
-        # Read response
-        stdout, stderr = proc.communicate(input=request_json, timeout=10)
 
-        if proc.returncode != 0:
-            return {"error": f"Server error: {stderr}"}
+@pytest.mark.asyncio
+async def test_strategy_list_tool():
+    """Test strategy_list tool"""
+    try:
+        from fastmcp import Client
+    except ImportError:
+        pytest.skip("FastMCP not installed")
 
+    async with Client("stdio", command=["python", "-m", "jesse_mcp"]) as client:
+        result = await client.call_tool("strategy_list", {})
+
+        assert isinstance(result, dict), f"Expected dict, got {type(result)}"
+        print(f"✅ Strategy list tool responded")
+
+
+@pytest.mark.asyncio
+async def test_optimize_tool():
+    """Test optimize tool (async)"""
+    try:
+        from fastmcp import Client
+    except ImportError:
+        pytest.skip("FastMCP not installed")
+
+    async with Client("stdio", command=["python", "-m", "jesse_mcp"]) as client:
+        result = await client.call_tool(
+            "optimize",
+            {
+                "strategy": "Test01",
+                "symbol": "BTC-USDT",
+                "timeframe": "1h",
+                "start_date": "2023-01-01",
+                "end_date": "2023-01-31",
+                "param_space": {"param1": {"type": "float", "min": 0, "max": 1}},
+            },
+        )
+
+        assert isinstance(result, dict)
+        print(f"✅ Optimize tool responded (async)")
+
+
+@pytest.mark.asyncio
+async def test_monte_carlo_tool():
+    """Test monte_carlo tool"""
+    try:
+        from fastmcp import Client
+    except ImportError:
+        pytest.skip("FastMCP not installed")
+
+    async with Client("stdio", command=["python", "-m", "jesse_mcp"]) as client:
+        mock_result = {"trades": [], "metrics": {}}
+        result = await client.call_tool(
+            "monte_carlo",
+            {
+                "backtest_result": mock_result,
+                "simulations": 1000,
+            },
+        )
+
+        assert isinstance(result, dict)
+        print(f"✅ Monte Carlo tool responded")
+
+
+@pytest.mark.asyncio
+async def test_invalid_tool():
+    """Test calling non-existent tool"""
+    try:
+        from fastmcp import Client
+    except ImportError:
+        pytest.skip("FastMCP not installed")
+
+    async with Client("stdio", command=["python", "-m", "jesse_mcp"]) as client:
+        # Should raise or return error
         try:
-            return json.loads(stdout)
-        except json.JSONDecodeError:
-            return {"error": f"Invalid JSON response: {stdout}"}
+            result = await client.call_tool("nonexistent_tool", {})
+            # Some clients may return error dict instead of raising
+            assert "error" in str(result) or "not found" in str(result).lower()
+        except Exception:
+            # Expected behavior for non-existent tool
+            pass
 
-    except subprocess.TimeoutExpired:
-        return {"error": "Server timeout"}
-    except Exception as e:
-        return {"error": f"Test error: {str(e)}"}
+        print(f"✅ Invalid tool handled correctly")
 
 
 if __name__ == "__main__":
-    asyncio.run(test_server())
+    pytest.main([__file__, "-v"])

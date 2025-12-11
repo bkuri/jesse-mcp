@@ -1,5 +1,5 @@
 """
-Phase 5 Pairs Trading & Advanced Analysis Tools
+Pairs Trading & Advanced Analysis Tools
 
 Implements correlation analysis, pairs trading strategies, factor decomposition,
 and market regime detection. Includes correlation_matrix(), pairs_backtest(),
@@ -61,16 +61,12 @@ class Phase5PairsAnalyzer:
         start_time = time.time()
 
         # Extract symbols from backtest results
-        symbols = [
-            r.get("symbol", f"Asset_{i}") for i, r in enumerate(backtest_results)
-        ]
+        symbols = [r.get("symbol", f"Asset_{i}") for i, r in enumerate(backtest_results)]
         n_assets = len(backtest_results)
 
         # Generate correlation matrix
         np.random.seed(42)
-        correlation_matrix = self._generate_correlation_matrix(
-            n_assets, correlation_threshold
-        )
+        correlation_matrix = self._generate_correlation_matrix(n_assets, correlation_threshold)
 
         # Find correlated pairs
         pairs = []
@@ -104,9 +100,7 @@ class Phase5PairsAnalyzer:
                 rolling_corrs.append(
                     {
                         "date": f"2024-01-{(day % 28) + 1:02d}",
-                        "correlations": self._generate_correlation_matrix(
-                            n_assets, 0.5
-                        ).tolist(),
+                        "correlations": self._generate_correlation_matrix(n_assets, 0.5).tolist(),
                     }
                 )
 
@@ -118,11 +112,11 @@ class Phase5PairsAnalyzer:
                 "correlation_strength": (
                     "Very Strong"
                     if np.mean(correlation_matrix) > 0.8
-                    else "Strong"
-                    if np.mean(correlation_matrix) > 0.7
-                    else "Moderate"
-                    if np.mean(correlation_matrix) > 0.5
-                    else "Weak"
+                    else (
+                        "Strong"
+                        if np.mean(correlation_matrix) > 0.7
+                        else "Moderate" if np.mean(correlation_matrix) > 0.5 else "Weak"
+                    )
                 ),
             },
             "pairs": pairs,
@@ -130,18 +124,12 @@ class Phase5PairsAnalyzer:
             "heatmap": None,  # Would be base64 image in production
             "analysis_stats": {
                 "strongest_pair": (
-                    pairs[0]["pair"] + f" ({pairs[0]['correlation']:.2f})"
-                    if pairs
-                    else "None"
+                    pairs[0]["pair"] + f" ({pairs[0]['correlation']:.2f})" if pairs else "None"
                 ),
                 "weakest_pair": (
-                    pairs[-1]["pair"] + f" ({pairs[-1]['correlation']:.2f})"
-                    if pairs
-                    else "None"
+                    pairs[-1]["pair"] + f" ({pairs[-1]['correlation']:.2f})" if pairs else "None"
                 ),
-                "cointegrated_pairs": len(
-                    [p for p in pairs if p["cointegration_score"] > 0.8]
-                ),
+                "cointegrated_pairs": len([p for p in pairs if p["cointegration_score"] > 0.8]),
             },
             "execution_time": time.time() - start_time,
             "use_mock": self.use_mock,
@@ -217,9 +205,7 @@ class Phase5PairsAnalyzer:
             "pair": f"{symbol1} / {symbol2}",
             "strategy": strategy,
             "total_return": float(cumulative_return - 1),
-            "sharpe_ratio": float(np.mean(returns) / np.std(returns))
-            if np.std(returns) > 0
-            else 0,
+            "sharpe_ratio": float(np.mean(returns) / np.std(returns)) if np.std(returns) > 0 else 0,
             "max_drawdown": float(np.max([abs(min(returns)), 0.08])),
             "win_rate": float(win_rate),
             "total_trades": n_trades,
@@ -296,8 +282,7 @@ class Phase5PairsAnalyzer:
         factor_attribution["residual"] = {
             "contribution": residual_contribution,
             "contribution_pct": float(
-                (residual_contribution / (total_contribution + residual_contribution))
-                * 100
+                (residual_contribution / (total_contribution + residual_contribution)) * 100
             ),
             "alpha": float(np.random.normal(0.0015, 0.0005)),
         }
@@ -310,9 +295,9 @@ class Phase5PairsAnalyzer:
                 "adjusted_r_squared": float(np.random.uniform(0.68, 0.93)),
                 "f_statistic": float(np.random.uniform(30, 50)),
                 "durbin_watson": float(np.random.uniform(1.8, 2.1)),
-                "model_significance": "Highly Significant"
-                if np.random.uniform(0, 1) > 0.3
-                else "Significant",
+                "model_significance": (
+                    "Highly Significant" if np.random.uniform(0, 1) > 0.3 else "Significant"
+                ),
             },
             "risk_metrics": {
                 "systematic_risk": float(np.random.uniform(0.08, 0.15)),
@@ -398,9 +383,7 @@ class Phase5PairsAnalyzer:
                             {
                                 "from_regime": i,
                                 "to_regime": j,
-                                "transition_probability": float(
-                                    np.random.uniform(0.05, 0.25)
-                                ),
+                                "transition_probability": float(np.random.uniform(0.05, 0.25)),
                                 "count": np.random.randint(2, 15),
                             }
                         )
@@ -455,9 +438,7 @@ class Phase5PairsAnalyzer:
 
     # Helper methods
 
-    def _generate_correlation_matrix(
-        self, n_assets: int, base_corr: float
-    ) -> np.ndarray:
+    def _generate_correlation_matrix(self, n_assets: int, base_corr: float) -> np.ndarray:
         """Generate a realistic correlation matrix"""
         # Create random correlation matrix
         A = np.random.randn(n_assets, n_assets)

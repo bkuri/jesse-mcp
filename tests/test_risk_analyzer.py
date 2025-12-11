@@ -12,7 +12,7 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 try:
-    from jesse_mcp.phase4.risk_analyzer import get_risk_analyzer
+    from jesse_mcp.risk_analyzer import get_risk_analyzer
 
     print("✅ Phase 4 risk analyzer imported successfully")
 except ImportError as e:
@@ -89,9 +89,7 @@ async def test_phase4_tools():
                     backtest_result=mock_backtest_result,
                     scenarios=["market_crash", "volatility_spike"],
                 )
-                success = (
-                    "stress_results" in result and len(result["stress_results"]) == 2
-                )
+                success = "stress_results" in result and len(result["stress_results"]) == 2
 
             elif test_name == "Risk Report":
                 result = await method(
@@ -114,13 +112,9 @@ async def test_phase4_tools():
                         f"      Probability of profit: {result.get('probability_of_profit', 0):.2%}"
                     )
                 elif test_name == "VaR Calculation":
-                    print(
-                        f"      VaR calculations: {len(result.get('var_results', {}))}"
-                    )
+                    print(f"      VaR calculations: {len(result.get('var_results', {}))}")
                 elif test_name == "Stress Test":
-                    print(
-                        f"      Scenarios tested: {len(result.get('stress_results', {}))}"
-                    )
+                    print(f"      Scenarios tested: {len(result.get('stress_results', {}))}")
                 elif test_name == "Risk Report":
                     risk = result.get("risk", {})
                     print(f"      Risk level: {risk.get('level', 'Unknown')}")

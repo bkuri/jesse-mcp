@@ -1,5 +1,5 @@
 """
-Phase 3 Optimization Tools Implementation
+Optimization Tools Implementation
 
 Advanced optimization and analysis tools for autonomous strategy improvement.
 Implements optimize(), walk_forward(), backtest_batch(), and analyze_results().
@@ -220,12 +220,14 @@ class Phase3Optimizer:
                 "value": trial.value if trial.value is not None else float("nan"),
                 "params": trial.params,
                 "state": trial.state.name,
-                "datetime_start": trial.datetime_start.isoformat()
-                if trial.datetime_start
-                else None,
-                "datetime_complete": trial.datetime_complete.isoformat()
-                if trial.datetime_complete
-                else None,
+                "datetime_start": (
+                    trial.datetime_start.isoformat() if trial.datetime_start else None
+                ),
+                "datetime_complete": (
+                    trial.datetime_complete.isoformat()
+                    if trial.datetime_complete
+                    else None
+                ),
             }
             trials.append(trial_data)
 
@@ -834,19 +836,25 @@ class Phase3Optimizer:
             "winning_trades": len(winning_trades),
             "losing_trades": len(losing_trades),
             "win_rate": round(len(winning_trades) / len(trades), 4),
-            "avg_win": round(float(np.mean([t["pnl"] for t in winning_trades])), 4)
-            if winning_trades
-            else 0,
-            "avg_loss": round(float(np.mean([t["pnl"] for t in losing_trades])), 4)
-            if losing_trades
-            else 0,
-            "profit_factor": round(
-                sum(t["pnl"] for t in winning_trades)
-                / abs(sum(t["pnl"] for t in losing_trades)),
-                4,
-            )
-            if losing_trades
-            else float("inf"),
+            "avg_win": (
+                round(float(np.mean([t["pnl"] for t in winning_trades])), 4)
+                if winning_trades
+                else 0
+            ),
+            "avg_loss": (
+                round(float(np.mean([t["pnl"] for t in losing_trades])), 4)
+                if losing_trades
+                else 0
+            ),
+            "profit_factor": (
+                round(
+                    sum(t["pnl"] for t in winning_trades)
+                    / abs(sum(t["pnl"] for t in losing_trades)),
+                    4,
+                )
+                if losing_trades
+                else float("inf")
+            ),
             "largest_win": round(max(t["pnl"] for t in trades), 4),
             "largest_loss": round(min(t["pnl"] for t in trades), 4),
             "avg_trade_duration": self._calculate_avg_duration(trades),
@@ -966,7 +974,7 @@ class Phase3Optimizer:
                 exit = datetime.strptime(trade["exit_date"], "%Y-%m-%d %H:%M:%S")
                 duration = (exit - entry).total_seconds() / 3600  # Convert to hours
                 durations.append(duration)
-            except:
+            except Exception:
                 continue
 
         return round(float(np.mean(durations)), 2) if durations else 0

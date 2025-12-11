@@ -12,7 +12,7 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 try:
-    from jesse_mcp.phase5.pairs_analyzer import get_pairs_analyzer
+    from jesse_mcp.pairs_analyzer import get_pairs_analyzer
 
     print("✅ Phase 5 pairs analyzer imported successfully")
 except ImportError as e:
@@ -82,11 +82,7 @@ async def test_phase5_tools():
                     correlation_threshold=0.7,
                     include_rolling=True,
                 )
-                success = (
-                    "summary" in result
-                    and "pairs" in result
-                    and len(result["pairs"]) > 0
-                )
+                success = "summary" in result and "pairs" in result and len(result["pairs"]) > 0
 
             elif test_name == "Pairs Backtest":
                 result = await method(
@@ -99,9 +95,7 @@ async def test_phase5_tools():
                     exit_threshold=0.5,
                 )
                 success = (
-                    "pair" in result
-                    and "total_trades" in result
-                    and result["total_trades"] > 0
+                    "pair" in result and "total_trades" in result and result["total_trades"] > 0
                 )
 
             elif test_name == "Factor Analysis":
@@ -110,10 +104,7 @@ async def test_phase5_tools():
                     factors=["market", "size", "momentum", "value"],
                     include_residuals=True,
                 )
-                success = (
-                    "factor_attribution" in result
-                    and len(result["factor_attribution"]) == 5
-                )
+                success = "factor_attribution" in result and len(result["factor_attribution"]) == 5
 
             elif test_name == "Regime Detector":
                 result = await method(
@@ -149,9 +140,7 @@ async def test_phase5_tools():
                     print(
                         f"      Factors analyzed: {len([k for k in result['factor_attribution'].keys() if k != 'residual'])}"
                     )
-                    print(
-                        f"      R-squared: {result['model_statistics']['r_squared']:.2%}"
-                    )
+                    print(f"      R-squared: {result['model_statistics']['r_squared']:.2%}")
                     print(
                         f"      Model significance: {result['model_statistics']['model_significance']}"
                     )

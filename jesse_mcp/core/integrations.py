@@ -8,8 +8,7 @@ Handles all interactions with Jesse to enable autonomous trading strategy operat
 import sys
 import os
 import logging
-from typing import Dict, List, Any, Optional, Tuple
-from datetime import datetime
+from typing import Dict, Any, Optional
 import traceback
 
 logger = logging.getLogger("jesse-mcp.integration")
@@ -31,6 +30,18 @@ for path in JESSE_PATHS:
 if JESSE_PATH:
     sys.path.insert(0, JESSE_PATH)
 
+
+def _check_jesse_ntfy_available() -> bool:
+    """Check if jesse-ntfy API is available as fallback"""
+    try:
+        import requests
+
+        response = requests.get("http://localhost:5033/health", timeout=5)
+        return response.status_code == 200
+    except Exception:
+        return False
+
+
 try:
     from jesse import research
     from jesse.strategies import Strategy
@@ -40,7 +51,18 @@ try:
     logger.info("✅ Jesse framework imported successfully")
 except ImportError as e:
     JESSE_AVAILABLE = False
+    JESSE_ERROR = str(e)
     logger.warning(f"⚠️ Jesse not available: {e}")
+
+    # Check if it's just missing jesse_rust and we can work around it
+    if "jesse_rust" in str(e):
+        logger.info("🔄 jesse_rust missing - checking for jesse-ntfy API")
+        # Try to use jesse-ntfy API instead
+        if _check_jesse_ntfy_available():
+            JESSE_AVAILABLE = True
+            logger.info("✅ Jesse integration layer loaded (via jesse-ntfy API)")
+        else:
+            logger.warning("⚠️ jesse-ntfy API not available")
 
 
 class JesseIntegrationError(Exception):
