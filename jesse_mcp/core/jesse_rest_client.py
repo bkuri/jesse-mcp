@@ -30,17 +30,37 @@ class JesseRESTClient:
         self, base_url: str = JESSE_API_BASE, api_token: str = JESSE_API_TOKEN
     ):
         self.base_url = base_url
-        self.api_token = api_token
+        self.api_password = api_token  # api_token is actually the password for Jesse
         self.session = requests.Session()
+        self.auth_token = None
 
-        # Set authorization header if token is provided
-        if self.api_token:
-            self.session.headers.update({"Authorization": f"Bearer {self.api_token}"})
-            logger.info("✅ Authorization token configured")
+        # Authenticate with Jesse to get a session token
+        if self.api_password:
+            self._authenticate()
         else:
-            logger.warning("⚠️ No JESSE_API_TOKEN provided - requests may fail")
+            logger.warning("⚠️ No JESSE_API_TOKEN provided - requests will fail")
 
         self._verify_connection()
+
+    def _authenticate(self):
+        """Authenticate with Jesse API to obtain a session token"""
+        try:
+            response = requests.post(
+                f"{self.base_url}/auth/login",
+                json={"password": self.api_password},
+                timeout=10,
+            )
+            response.raise_for_status()
+            data = response.json()
+            self.auth_token = data.get("auth_token")
+            if self.auth_token:
+                # Use lowercase 'authorization' header with raw token (no Bearer prefix)
+                self.session.headers.update({"authorization": self.auth_token})
+                logger.info("✅ Authenticated with Jesse API")
+            else:
+                logger.error("❌ No auth_token in login response")
+        except Exception as e:
+            logger.error(f"❌ Authentication failed: {e}")
 
     def _verify_connection(self):
         """Verify connection to Jesse API"""

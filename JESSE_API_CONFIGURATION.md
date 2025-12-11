@@ -15,10 +15,14 @@ Configure these in the MetaMCP MCP Servers panel for jesse-mcp:
 - **Required**: Yes
 
 ### 2. `JESSE_API_TOKEN`
-- **Description**: API authentication token/password for Jesse
-- **Value**: The password configured in Jesse API
+- **Description**: API password for Jesse authentication (NOT the LICENSE_API_TOKEN)
+- **Default**: `jessesecurepassword2025` (see Jesse .env PASSWORD variable)
 - **Required**: Yes
-- **Note**: This is used as the Bearer token in the `Authorization: Bearer` header
+- **Important**: This is the `PASSWORD` value from Jesse's `.env` file, NOT the `LICENSE_API_TOKEN`
+- **Authentication Flow**: 
+  1. Client sends POST /auth/login with password from JESSE_API_TOKEN
+  2. Jesse returns an auth_token
+  3. Client uses auth_token in lowercase `authorization` header for all subsequent requests
 
 ## How to Configure in MetaMCP
 
@@ -26,49 +30,66 @@ Configure these in the MetaMCP MCP Servers panel for jesse-mcp:
 2. Navigate to "MCP Servers"
 3. Find "jesse-mcp" in the list
 4. Edit the environment variables:
-   - Add `JESSE_URL=http://server2:8000`
-   - Add `JESSE_API_TOKEN=<actual_token_from_jesse>`
+   - Set `JESSE_URL=http://server2:8000`
+   - Set `JESSE_API_TOKEN=<PASSWORD_from_jesse_.env_file>`
+     - On server2, check: `cat /home/jesse/jesse-trading/.env | grep "^PASSWORD="`
+     - Default: `jessesecurepassword2025`
 5. Save and restart the container
+
+**Note**: The token you provide is the PASSWORD, not the LICENSE_API_TOKEN. The client will automatically:
+1. Login to Jesse using this password
+2. Obtain a session token
+3. Use the session token for all subsequent API calls
 
 ## Verifying Configuration
 
-Once configured, test the connection:
+Once configured in MetaMCP, the jesse-mcp client will automatically:
+1. Authenticate with Jesse using the PASSWORD
+2. Obtain a session token
+3. Use that token for all API operations
+
+To manually test the authentication:
 
 ```bash
-# Check if environment variables are set
-env | grep JESSE_
+# Step 1: Login to get an auth token
+AUTH_TOKEN=$(curl -s -X POST http://server2:8000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"password": "jessesecurepassword2025"}' | jq -r '.auth_token')
 
-# Test the Jesse API directly
-curl -H "Authorization: Bearer <JESSE_API_TOKEN>" http://server2:8000/
-
-# Test backtest endpoint
-curl -X POST http://server2:8000/backtest \
-  -H "Authorization: Bearer <JESSE_API_TOKEN>" \
+# Step 2: Use the auth token in API calls (note lowercase 'authorization')
+curl -s -X POST http://server2:8000/backtest \
+  -H "authorization: $AUTH_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{...backtest_payload...}'
 ```
 
-## Jesse API Authentication
+## Jesse API Authentication Details
 
-Jesse requires Bearer token authentication. The token is passed as:
+Jesse uses a two-step authentication process:
+1. **Login**: POST `/auth/login` with `{"password": "..."}` returns `{"auth_token": "..."}`
+2. **API Calls**: Include token in lowercase `authorization:` header (no "Bearer" prefix)
+
+Example:
 ```
-Authorization: Bearer <JESSE_API_TOKEN>
+authorization: c8f16e7c14bd480cd46982b58595c478ea099ec617fd813bd234133d9796b4a3
 ```
 
 ## Current Status
 
 - Jesse service running on server2: ✅
 - API endpoint accessible: ✅
-- Authentication: ⚠️ (Requires correct token from MetaMCP configuration)
+- Authentication: ✅ (Working with correct PASSWORD)
+- jesse-mcp REST client: ✅ (Automatically handles login and token management)
 
 ## Troubleshooting
 
-If you see `401 Unauthorized` errors:
-1. Verify `JESSE_API_TOKEN` is correctly set in MetaMCP
-2. Check that the token matches the password configured in Jesse
-3. Verify `JESSE_URL` points to server2 and port 8000 is accessible
+If you see `"Invalid password"` errors:
+1. Verify `JESSE_API_TOKEN` is set to the PASSWORD from Jesse's `.env` file
+2. On server2, check: `sudo cat /home/jesse/jesse-trading/.env | grep "^PASSWORD="`
+3. Update MetaMCP jesse-mcp environment variables with correct PASSWORD
+4. Restart the jesse-mcp container
 
-If you see `Invalid password` errors:
-1. The token value is incorrect
-2. Contact the system administrator for the correct token value
-3. Check Jesse service logs on server2 for authentication issues
+If you see connection errors:
+1. Verify Jesse service is running: `ssh server2 "sudo systemctl status jesse.service"`
+2. Verify network connectivity: `curl -s http://server2:8000/ | head -10`
+3. Check firewall rules allow traffic on port 8000
