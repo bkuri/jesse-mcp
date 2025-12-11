@@ -569,6 +569,15 @@ def main():
     # Initialize dependencies when server starts
     _initialize_dependencies()
 
+    # Register agent tools
+    try:
+        from jesse_mcp.agent_tools import register_agent_tools
+
+        register_agent_tools(mcp)
+        logger.info("✅ Agent tools registered")
+    except Exception as e:
+        logger.warning(f"⚠️  Agent tools registration failed: {e}")
+
     parser = argparse.ArgumentParser(
         description="Jesse MCP Server - Quantitative Trading Analysis"
     )
