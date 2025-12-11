@@ -5,27 +5,44 @@ Provides a clean abstraction over Jesse's REST API (http://localhost:8000)
 allowing full interactivity with Jesse without requiring local module imports.
 """
 
+import os
 import requests
 import logging
 from typing import Dict, Any, Optional
 
 logger = logging.getLogger("jesse-mcp.rest-client")
 
-JESSE_API_BASE = "http://localhost:8000"
+# Get Jesse API configuration from environment
+JESSE_URL = os.getenv("JESSE_URL", "http://localhost:8000")
+JESSE_API_TOKEN = os.getenv("JESSE_API_TOKEN", "")
+JESSE_API_BASE = JESSE_URL
 
 
 class JesseRESTClient:
     """Client for interacting with Jesse via REST API"""
 
-    def __init__(self, base_url: str = JESSE_API_BASE):
+    def __init__(
+        self, base_url: str = JESSE_API_BASE, api_token: str = JESSE_API_TOKEN
+    ):
         self.base_url = base_url
+        self.api_token = api_token
         self.session = requests.Session()
+
+        # Set authorization header if token is provided
+        if self.api_token:
+            self.session.headers.update({"Authorization": f"Bearer {self.api_token}"})
+            logger.info("✅ Authorization token configured")
+        else:
+            logger.warning("⚠️ No JESSE_API_TOKEN provided - requests may fail")
+
         self._verify_connection()
 
     def _verify_connection(self):
         """Verify connection to Jesse API"""
         try:
             response = self.session.get(f"{self.base_url}/")
+            if response.status_code == 401:
+                raise ConnectionError("Unauthorized - check JESSE_API_TOKEN")
             if response.status_code != 200:
                 raise ConnectionError(f"Jesse API returned {response.status_code}")
             logger.info(f"✅ Connected to Jesse API at {self.base_url}")
