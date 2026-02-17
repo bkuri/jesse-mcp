@@ -2,8 +2,8 @@
 """
 Jesse MCP Server - FastMCP Implementation
 
-Provides 17 tools for quantitative trading analysis:
-- Phase 1: Backtesting (4 tools)
+Provides 18 tools for quantitative trading analysis:
+- Phase 1: Backtesting (5 tools)
 - Phase 3: Optimization (4 tools) [formerly phase3]
 - Phase 4: Risk Analysis (4 tools) [formerly phase4]
 - Phase 5: Pairs Trading (5 tools) [formerly phase5]
@@ -11,9 +11,12 @@ Provides 17 tools for quantitative trading analysis:
 
 import asyncio
 import logging
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastmcp import FastMCP
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -82,7 +85,59 @@ def _initialize_dependencies():
 
 mcp = FastMCP("jesse-mcp", version="1.0.0")
 
+
+@mcp.custom_route("/health", methods=["GET"])
+async def health_endpoint(request: Request) -> JSONResponse:
+    """
+    HTTP health endpoint for monitoring Jesse MCP server status.
+
+    Returns MCP server status, Jesse connection status, and timestamp.
+    """
+    from jesse_mcp.core.jesse_rest_client import get_jesse_rest_client
+
+    jesse_status = {"connected": False, "error": None}
+    try:
+        client = get_jesse_rest_client()
+        jesse_status = client.health_check()
+    except Exception as e:
+        jesse_status["error"] = str(e)
+
+    return JSONResponse(
+        {
+            "status": "healthy",
+            "mcp_server": "jesse-mcp",
+            "version": "1.0.0",
+            "jesse": jesse_status,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+
+
 # ==================== PHASE 1: BACKTESTING TOOLS ====================
+
+
+@mcp.tool
+def jesse_status() -> dict:
+    """
+    Check Jesse REST API health and connection status.
+
+    Returns connection status, Jesse version, and available strategies count.
+    Use this to verify Jesse is reachable before running backtests or optimizations.
+    """
+    try:
+        from jesse_mcp.core.jesse_rest_client import get_jesse_rest_client
+
+        client = get_jesse_rest_client()
+        return client.health_check()
+    except Exception as e:
+        logger.error(f"Jesse status check failed: {e}")
+        return {
+            "connected": False,
+            "jesse_url": None,
+            "jesse_version": None,
+            "strategies_count": None,
+            "error": str(e),
+        }
 
 
 @mcp.tool
@@ -200,6 +255,29 @@ def candles_import(
     except Exception as e:
         logger.error(f"Candles import failed: {e}")
         return {"error": str(e), "success": False}
+
+
+@mcp.tool
+def rate_limit_status() -> dict:
+    """
+    Get current rate limiter status for Jesse API calls.
+
+    Returns:
+        Dict with rate limit configuration and statistics:
+        - enabled: Whether rate limiting is active
+        - rate_per_second: Configured requests per second
+        - available_tokens: Current tokens available
+        - wait_mode: Whether to wait or reject when limited
+        - stats: Total requests, waits, rejections, wait time
+    """
+    try:
+        from jesse_mcp.core.rate_limiter import get_rate_limiter
+
+        limiter = get_rate_limiter()
+        return limiter.get_status()
+    except Exception as e:
+        logger.error(f"Rate limit status failed: {e}")
+        return {"error": str(e)}
 
 
 # ==================== PHASE 3: OPTIMIZATION TOOLS ====================
@@ -556,6 +634,51 @@ async def regime_detector(
         return result
     except Exception as e:
         logger.error(f"Regime detector failed: {e}")
+        return {"error": str(e), "error_type": type(e).__name__}
+
+
+# ==================== CACHE MANAGEMENT TOOLS ====================
+
+
+@mcp.tool
+def cache_stats() -> dict:
+    """
+    Get cache statistics including hit/miss ratio and cache sizes.
+
+    Returns:
+        Dict with cache status, hit rates, and sizes for all caches
+    """
+    try:
+        from jesse_mcp.core.cache import get_all_stats
+
+        return get_all_stats()
+    except Exception as e:
+        logger.error(f"Cache stats failed: {e}")
+        return {"error": str(e), "error_type": type(e).__name__}
+
+
+@mcp.tool
+def cache_clear(cache_name: Optional[str] = None) -> dict:
+    """
+    Clear cache(s) to free memory or force fresh data.
+
+    Args:
+        cache_name: Specific cache to clear (strategy_list, backtest).
+                   If None, clears all caches.
+
+    Returns:
+        Dict with number of entries cleared per cache
+    """
+    try:
+        from jesse_mcp.core.cache import clear_all_caches, clear_cache
+
+        if cache_name:
+            count = clear_cache(cache_name)
+            return {"cleared": {cache_name: count}}
+        else:
+            return {"cleared": clear_all_caches()}
+    except Exception as e:
+        logger.error(f"Cache clear failed: {e}")
         return {"error": str(e), "error_type": type(e).__name__}
 
 

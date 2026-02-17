@@ -4,20 +4,221 @@
 
 Jesse has been successfully installed and integrated with the jesse-mcp server. All 17 tools are now fully functional.
 
-### Quick Start
+---
 
-#### Activate Jesse Environment
+## Importing Historical Candle Data
+
+Jesse requires historical candle data in its database before running backtests. This section covers importing data via the REST API.
+
+### Prerequisites
+
+1. Jesse containers must be running:
+   ```bash
+   podman ps | grep jesse
+   # Expected: jesse, jesse-postgres, jesse-redis
+   ```
+
+2. Authentication token (from Jesse UI or environment):
+   ```bash
+   # Get token by logging in
+   curl -X POST http://localhost:9000/auth/login \
+     -H "Content-Type: application/json" \
+     -d '{"password": "YOUR_PASSWORD"}'
+   # Response: {"auth_token": "session-uuid-here"}
+   ```
+
+### Import Candles via REST API
+
+**Endpoint**: `POST /candles/import`
+
+**Required Parameters**:
+| Parameter | Type | Description | Example |
+|-----------|------|-------------|---------|
+| `id` | string | UUID for tracking the import | `"550e8400-e29b-41d4-a716-446655440000"` |
+| `exchange` | string | Exchange name (see supported list) | `"Binance"` |
+| `symbol` | string | Trading pair with hyphen format | `"BTC-USDT"` |
+| `start_date` | string | Start date for import | `"2023-01-01"` |
+
+**Supported Exchanges**:
+- `Binance`, `Binance Spot`, `Binance US Spot`
+- `Binance Perpetual Futures`, `Binance Perpetual Futures Testnet`
+- `Bybit Spot`, `Bybit USDT Perpetual`, `Bybit USDC Perpetual`
+- `Bybit Spot Testnet`, `Bybit USDT Perpetual Testnet`
+- `Bitfinex Spot`
+- `Coinbase Spot`
+- `Gate Spot`, `Gate USDT Perpetual`
+- `Hyperliquid Perpetual`, `Hyperliquid Perpetual Testnet`
+
+### Example: Import BTC-USDT Candles
+
+```bash
+# Using podman exec to call Jesse API from inside container
+podman exec jesse curl -X POST http://localhost:9000/candles/import \
+  -H "Content-Type: application/json" \
+  -H "Authorization: YOUR_AUTH_TOKEN" \
+  -d '{
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "exchange": "Binance",
+    "symbol": "BTC-USDT",
+    "start_date": "2023-01-01"
+  }'
+# Response: {"message": "Started importing candles..."}
+```
+
+### Example: Import ETH-USDT Candles
+
+```bash
+# From host machine via port 9000
+curl -X POST http://localhost:9000/candles/import \
+  -H "Content-Type: application/json" \
+  -H "Authorization: YOUR_AUTH_TOKEN" \
+  -d '{
+    "id": "660e8400-e29b-41d4-a716-446655440001",
+    "exchange": "Binance",
+    "symbol": "ETH-USDT",
+    "start_date": "2023-01-01"
+  }'
+```
+
+### Example: Import Multiple Symbols (Script)
+
+```bash
+#!/bin/bash
+# import_candles.sh
+
+TOKEN="your-auth-token-here"
+EXCHANGE="Binance"
+SYMBOLS=("BTC-USDT" "ETH-USDT" "SOL-USDT" "DOGE-USDT")
+START_DATE="2023-01-01"
+
+for SYMBOL in "${SYMBOLS[@]}"; do
+  UUID=$(uuidgen)
+  echo "Importing $SYMBOL..."
+  curl -X POST http://localhost:9000/candles/import \
+    -H "Content-Type: application/json" \
+    -H "Authorization: $TOKEN" \
+    -d "{
+      \"id\": \"$UUID\",
+      \"exchange\": \"$EXCHANGE\",
+      \"symbol\": \"$SYMBOL\",
+      \"start_date\": \"$START_DATE\"
+    }"
+  echo ""
+  sleep 2
+done
+```
+
+### Verify Data Import
+
+**1. Check existing candles via API:**
+```bash
+curl -X POST http://localhost:9000/candles/existing \
+  -H "Authorization: YOUR_AUTH_TOKEN"
+# Response: {"data": [{"exchange": "Binance", "symbol": "BTC-USDT", 
+#            "start_date": "2023-01-01", "end_date": "2024-12-31"}]}
+```
+
+**2. Query database directly:**
+```bash
+podman exec jesse-postgres psql -U jesse_user -d jesse_db -c \
+  "SELECT exchange, symbol, timeframe, COUNT(*) as candles,
+          to_timestamp(MIN(timestamp)/1000)::date as first_date,
+          to_timestamp(MAX(timestamp)/1000)::date as last_date
+   FROM candle GROUP BY exchange, symbol, timeframe ORDER BY exchange, symbol;"
+```
+
+**3. Check import progress via API:**
+```bash
+# Get available symbols (verifies exchange connection)
+curl -X POST http://localhost:9000/exchange/supported-symbols \
+  -H "Content-Type: application/json" \
+  -H "Authorization: YOUR_AUTH_TOKEN" \
+  -d '{"exchange": "Binance"}'
+```
+
+### Cancel Import Process
+
+```bash
+curl -X POST http://localhost:9000/candles/cancel-import \
+  -H "Content-Type: application/json" \
+  -H "Authorization: YOUR_AUTH_TOKEN" \
+  -d '{"id": "550e8400-e29b-41d4-a716-446655440000"}'
+```
+
+### Delete Candles
+
+```bash
+curl -X POST http://localhost:9000/candles/delete \
+  -H "Content-Type: application/json" \
+  -H "Authorization: YOUR_AUTH_TOKEN" \
+  -d '{"exchange": "Binance", "symbol": "BTC-USDT"}'
+```
+
+### Troubleshooting Candle Imports
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| `"exchange is not supported"` | Wrong exchange name | Use exact name from supported list (case-sensitive) |
+| `"symbol not found"` | Invalid symbol format | Use hyphen format: `BTC-USDT` not `BTCUSDT` |
+| `"start_date must be before today"` | Future date specified | Use past date in `YYYY-MM-DD` format |
+| `"Unauthorized"` | Missing/invalid token | Login via `/auth/login` to get fresh token |
+| Import hangs/timeout | Network issues to exchange | Check internet connection, try again later |
+| `"CandleNotFoundInExchange"` | Exchange API doesn't have data | Try a more recent start_date |
+| Rate limit errors | Too many requests | Add delays between imports, use `sleep 5` |
+
+**Common Issues:**
+
+1. **Symbol format mismatch**:
+   ```bash
+   # ❌ Wrong
+   "symbol": "BTCUSDT"
+   # ✅ Correct
+   "symbol": "BTC-USDT"
+   ```
+
+2. **Exchange name case sensitivity**:
+   ```bash
+   # ❌ Wrong
+   "exchange": "binance"
+   # ✅ Correct
+   "exchange": "Binance"
+   ```
+
+3. **Invalid UUID format**:
+   ```bash
+   # Use uuidgen or Python uuid module
+   UUID=$(uuidgen)  # Linux
+   python -c "import uuid; print(uuid.uuid4())"  # Python
+   ```
+
+4. **Database connection issues**:
+   ```bash
+   # Verify postgres is accessible
+   podman exec jesse-postgres pg_isready -U jesse_user -d jesse_db
+   ```
+
+5. **Clear candle cache**:
+   ```bash
+   curl -X POST http://localhost:9000/candles/clear-cache \
+     -H "Authorization: YOUR_AUTH_TOKEN"
+   ```
+
+---
+
+## Quick Start
+
+### Activate Jesse Environment
 ```bash
 source /home/bk/jesse-venv/bin/activate
 ```
 
-#### Run MCP Server with Jesse
+### Run MCP Server with Jesse
 ```bash
 cd /home/bk/source/jesse-mcp
 PYTHONPATH=/home/bk/source/jesse-mcp:$PYTHONPATH python server.py
 ```
 
-#### Run E2E Tests with Jesse
+### Run E2E Tests with Jesse
 ```bash
 cd /home/bk/source/jesse-mcp
 PYTHONPATH=/home/bk/source/jesse-mcp:$PYTHONPATH python test_e2e.py

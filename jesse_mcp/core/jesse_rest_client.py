@@ -16,6 +16,13 @@ import requests
 import logging
 from typing import Dict, Any, Optional
 
+from jesse_mcp.core.rate_limiter import get_rate_limiter
+from jesse_mcp.core.cache import (
+    get_backtest_cache,
+    get_strategy_cache,
+    JESSE_CACHE_ENABLED,
+)
+
 logger = logging.getLogger("jesse-mcp.rest-client")
 
 # Get Jesse API configuration from environment
@@ -99,6 +106,55 @@ class JesseRESTClient:
         except Exception as e:
             logger.error(f"❌ Cannot connect to Jesse API: {e}")
             raise
+
+    def health_check(self) -> Dict[str, Any]:
+        """
+        Check Jesse API health and return status info.
+
+        Returns:
+            Dict with connection status, Jesse version, and strategies count
+        """
+        result = {
+            "connected": False,
+            "jesse_url": self.base_url,
+            "jesse_version": None,
+            "strategies_count": None,
+            "error": None,
+        }
+
+        try:
+            response = self.session.get(f"{self.base_url}/", timeout=5)
+            if response.status_code == 200:
+                result["connected"] = True
+                data = response.json()
+                result["jesse_version"] = data.get("version", "unknown")
+            elif response.status_code == 401:
+                result["error"] = "Unauthorized - check JESSE_API_TOKEN"
+            else:
+                result["error"] = f"Jesse API returned {response.status_code}"
+        except requests.exceptions.Timeout:
+            result["error"] = "Connection timeout"
+        except requests.exceptions.ConnectionError:
+            result["error"] = "Connection refused"
+        except Exception as e:
+            result["error"] = str(e)
+
+        if result["connected"]:
+            try:
+                strategies_response = self.session.get(
+                    f"{self.base_url}/strategies", timeout=5
+                )
+                if strategies_response.status_code == 200:
+                    strategies_data = strategies_response.json()
+                    if isinstance(strategies_data, list):
+                        result["strategies_count"] = len(strategies_data)
+                    elif isinstance(strategies_data, dict):
+                        strategies = strategies_data.get("strategies", [])
+                        result["strategies_count"] = len(strategies)
+            except Exception:
+                pass
+
+        return result
 
     def backtest(
         self,
@@ -204,15 +260,161 @@ class JesseRESTClient:
                 "benchmark": False,
             }
 
-            response = self.session.post(f"{self.base_url}/backtest", json=payload)
-            response.raise_for_status()
+            result = self._rate_limited_backtest(payload)
 
             logger.info(f"✅ Backtest completed for {strategy}")
-            return response.json()
+            return result
 
         except Exception as e:
             logger.error(f"❌ Backtest failed: {e}")
             return {"error": str(e), "success": False}
+
+    def cached_backtest(
+        self,
+        strategy: str,
+        symbol: str,
+        timeframe: str,
+        start_date: str,
+        end_date: str,
+        exchange: str = "Binance",
+        starting_balance: float = 10000,
+        fee: float = 0.001,
+        leverage: float = 1,
+        exchange_type: str = "futures",
+        hyperparameters: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Run a backtest with caching support (1 hour TTL by default).
+
+        Cache key is based on all parameters - identical requests will return
+        cached results if within TTL.
+
+        Args:
+            Same as backtest()
+
+        Returns:
+            Backtest results dict (cached or fresh)
+        """
+        if not JESSE_CACHE_ENABLED:
+            return self.backtest(
+                strategy=strategy,
+                symbol=symbol,
+                timeframe=timeframe,
+                start_date=start_date,
+                end_date=end_date,
+                exchange=exchange,
+                starting_balance=starting_balance,
+                fee=fee,
+                leverage=leverage,
+                exchange_type=exchange_type,
+                hyperparameters=hyperparameters,
+            )
+
+        cache = get_backtest_cache()
+        cache_key = cache._hash_key(
+            strategy,
+            symbol,
+            timeframe,
+            start_date,
+            end_date,
+            exchange,
+            starting_balance,
+            fee,
+            leverage,
+            exchange_type,
+            tuple(sorted((hyperparameters or {}).items())),
+        )
+
+        cached = cache.get(cache_key)
+        if cached is not None:
+            logger.info(f"✅ Cache hit for backtest: {strategy} on {symbol}")
+            return cached
+
+        result = self.backtest(
+            strategy=strategy,
+            symbol=symbol,
+            timeframe=timeframe,
+            start_date=start_date,
+            end_date=end_date,
+            exchange=exchange,
+            starting_balance=starting_balance,
+            fee=fee,
+            leverage=leverage,
+            exchange_type=exchange_type,
+            hyperparameters=hyperparameters,
+        )
+
+        if "error" not in result:
+            cache.set(cache_key, result)
+            logger.debug(f"Cached backtest result for: {strategy} on {symbol}")
+
+        return result
+
+    def get_strategies_cached(self) -> Dict[str, Any]:
+        """
+        Get list of strategies with caching (5 minute TTL by default).
+
+        Returns:
+            Dict with strategies list
+        """
+        if not JESSE_CACHE_ENABLED:
+            return self._fetch_strategies()
+
+        cache = get_strategy_cache()
+        cache_key = "strategy_list"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            logger.info("✅ Cache hit for strategy list")
+            return cached
+
+        result = self._fetch_strategies()
+        if "error" not in result:
+            cache.set(cache_key, result)
+            logger.debug("Cached strategy list")
+
+        return result
+
+    def _fetch_strategies(self) -> Dict[str, Any]:
+        """Fetch strategies from API without caching."""
+        try:
+            response = self.session.get(f"{self.base_url}/strategies", timeout=5)
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            logger.error(f"❌ Failed to get strategies: {e}")
+            return {"error": str(e), "strategies": []}
+
+    def _rate_limited_request(
+        self, method: str, endpoint: str, **kwargs
+    ) -> Optional[requests.Response]:
+        limiter = get_rate_limiter()
+        if not limiter.acquire():
+            return None
+        return getattr(self.session, method)(f"{self.base_url}{endpoint}", **kwargs)
+
+    def _rate_limited_backtest(self, payload: dict) -> Dict[str, Any]:
+        limiter = get_rate_limiter()
+        if not limiter.acquire():
+            return {"error": "Rate limit exceeded", "success": False}
+        response = self.session.post(f"{self.base_url}/backtest", json=payload)
+        response.raise_for_status()
+        return response.json()
+
+    def _rate_limited_optimization(self, payload: dict) -> Dict[str, Any]:
+        limiter = get_rate_limiter()
+        if not limiter.acquire():
+            return {"error": "Rate limit exceeded", "success": False}
+        response = self.session.post(f"{self.base_url}/optimization", json=payload)
+        response.raise_for_status()
+        return response.json()
+
+    def _rate_limited_monte_carlo(self, payload: dict) -> Dict[str, Any]:
+        limiter = get_rate_limiter()
+        if not limiter.acquire():
+            return {"error": "Rate limit exceeded", "success": False}
+        response = self.session.post(f"{self.base_url}/monte-carlo", json=payload)
+        response.raise_for_status()
+        return response.json()
 
     def optimization(
         self,
@@ -326,11 +528,10 @@ class JesseRESTClient:
                 "max_cpus": 1,
             }
 
-            response = self.session.post(f"{self.base_url}/optimization", json=payload)
-            response.raise_for_status()
+            result = self._rate_limited_optimization(payload)
 
             logger.info(f"✅ Optimization started for {strategy}")
-            return response.json()
+            return result
 
         except Exception as e:
             logger.error(f"❌ Optimization failed: {e}")
@@ -367,11 +568,10 @@ class JesseRESTClient:
             if confidence_levels:
                 payload["confidence_levels"] = confidence_levels
 
-            response = self.session.post(f"{self.base_url}/monte-carlo", json=payload)
-            response.raise_for_status()
+            result = self._rate_limited_monte_carlo(payload)
 
             logger.info("✅ Monte Carlo simulation completed")
-            return response.json()
+            return result
 
         except Exception as e:
             logger.error(f"❌ Monte Carlo failed: {e}")

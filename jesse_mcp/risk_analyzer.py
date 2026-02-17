@@ -45,7 +45,7 @@ class Phase4RiskAnalyzer:
         self,
         backtest_result: Dict[str, Any],
         simulations: int = 10000,
-        confidence_levels: List[float] = None,
+        confidence_levels: Optional[List[float]] = None,
         resample_method: str = "bootstrap",
         block_size: int = 20,
         include_drawdowns: bool = True,
@@ -180,8 +180,8 @@ class Phase4RiskAnalyzer:
     async def var_calculation(
         self,
         backtest_result: Dict[str, Any],
-        confidence_levels: List[float] = None,
-        time_horizons: List[int] = None,
+        confidence_levels: Optional[List[float]] = None,
+        time_horizons: Optional[List[int]] = None,
         method: str = "historical",
         monte_carlo_sims: int = 10000,
         **kwargs,
@@ -265,12 +265,12 @@ class Phase4RiskAnalyzer:
     async def stress_test(
         self,
         backtest_result: Dict[str, Any],
-        scenarios: List[str] = None,
-        custom_scenarios: Dict[str, Any] = None,
+        scenarios: Optional[List[str]] = None,
+        custom_scenarios: Optional[Dict[str, Any]] = None,
         shock_magnitude: float = -0.20,
         volatility_multiplier: float = 3.0,
         correlation_shift: float = 0.8,
-        recovery_periods: List[int] = None,
+        recovery_periods: Optional[List[int]] = None,
         **kwargs,
     ) -> Dict[str, Any]:
         """

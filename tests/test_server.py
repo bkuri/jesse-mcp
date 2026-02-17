@@ -22,13 +22,14 @@ async def test_tools_list():
     async with Client(transport) as client:
         tools = await client.list_tools()
 
-        # Verify we have at least the core 17 tools (may have more with agent tools)
-        assert len(tools) >= 17, f"Expected at least 17 tools, got {len(tools)}"
+        # Verify we have at least the core 18 tools (may have more with agent tools)
+        assert len(tools) >= 20, f"Expected at least 20 tools, got {len(tools)}"
 
         # Verify core tool names are present
         tool_names = {t.name for t in tools}
         core_tools = {
             # Phase 1: Backtesting
+            "jesse_status",
             "backtest",
             "strategy_list",
             "strategy_read",
@@ -49,13 +50,16 @@ async def test_tools_list():
             "pairs_backtest",
             "factor_analysis",
             "regime_detector",
+            # Cache Management
+            "cache_stats",
+            "cache_clear",
         }
         assert core_tools.issubset(tool_names), (
             f"Missing core tools. Expected subset: {core_tools}, Got: {tool_names}"
         )
 
         print(
-            f"✅ All {len(tools)} tools discovered successfully (17 core + {len(tools) - 17} agent)"
+            f"✅ All {len(tools)} tools discovered successfully (20 core + {len(tools) - 20} agent)"
         )
 
 
@@ -105,6 +109,25 @@ async def test_strategy_list_tool():
         data = result.data if hasattr(result, "data") else result
         assert isinstance(data, dict), f"Expected dict, got {type(data)}"
         print(f"✅ Strategy list tool responded: {data.get('count', 0)} strategies")
+
+
+@pytest.mark.asyncio
+async def test_jesse_status_tool():
+    """Test jesse_status tool"""
+    try:
+        from fastmcp import Client
+        from fastmcp.client.transports import StdioTransport
+    except ImportError:
+        pytest.skip("FastMCP not installed")
+
+    transport = StdioTransport(command="python", args=["-m", "jesse_mcp"])
+    async with Client(transport) as client:
+        result = await client.call_tool("jesse_status", {})
+
+        data = result.data if hasattr(result, "data") else result
+        assert isinstance(data, dict), f"Expected dict, got {type(data)}"
+        assert "connected" in data, "Expected 'connected' key in jesse_status result"
+        print(f"✅ Jesse status tool responded: connected={data.get('connected')}")
 
 
 @pytest.mark.asyncio
@@ -181,6 +204,32 @@ async def test_invalid_tool():
             pass
 
         print(f"✅ Invalid tool handled correctly")
+
+
+@pytest.mark.asyncio
+async def test_cache_tools():
+    """Test cache_stats and cache_clear tools"""
+    try:
+        from fastmcp import Client
+        from fastmcp.client.transports import StdioTransport
+    except ImportError:
+        pytest.skip("FastMCP not installed")
+
+    transport = StdioTransport(command="python", args=["-m", "jesse_mcp"])
+    async with Client(transport) as client:
+        # Test cache_stats
+        result = await client.call_tool("cache_stats", {})
+        data = result.data if hasattr(result, "data") else result
+        assert isinstance(data, dict)
+        assert "enabled" in data
+        print(f"✅ Cache stats tool responded: enabled={data.get('enabled')}")
+
+        # Test cache_clear
+        result = await client.call_tool("cache_clear", {})
+        data = result.data if hasattr(result, "data") else result
+        assert isinstance(data, dict)
+        assert "cleared" in data
+        print(f"✅ Cache clear tool responded")
 
 
 if __name__ == "__main__":
