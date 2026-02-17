@@ -1,52 +1,266 @@
 # Jesse MCP Development Guidelines
 
+## Project Overview
+
+Jesse MCP is a Model Context Protocol (MCP) server exposing Jesse's algorithmic trading framework capabilities to LLM agents. It provides 17 tools across 5 phases: backtesting, optimization, risk analysis, pairs trading, and data management.
+
 ## Build/Lint/Test Commands
 
 ```bash
-# Install dependencies
+# Install dependencies (runtime)
+pip install -r requirements.txt
+
+# Install dependencies (development)
 pip install -r requirements-dev.txt
+
+# Install package in editable mode
+pip install -e .
 
 # Run all tests
 pytest
 
-# Run single test
-pytest tests/test_server.py::test_server
+# Run all tests with verbose output
+pytest -v
 
-# Lint code
+# Run single test file
+pytest tests/test_server.py
+
+# Run single test function
+pytest tests/test_server.py::test_tools_list
+
+# Run single test class method
+pytest tests/test_optimizer.py::test_optimize
+
+# Run tests matching a pattern
+pytest -k "monte_carlo"
+
+# Run tests with print output visible
+pytest -v -s tests/test_optimizer.py
+
+# Lint code with flake8
 flake8 jesse_mcp/
 
-# Format code
+# Format code with black
 black jesse_mcp/
 
-# Type checking
+# Type checking with mypy
 mypy jesse_mcp/
+
+# Run the MCP server (stdio transport)
+python -m jesse_mcp
+
+# Run the MCP server (HTTP transport)
+python -m jesse_mcp --transport http --port 8000
 ```
 
 ## Code Style Guidelines
 
 ### Imports & Formatting
-- Use `black` for code formatting
-- Import order: stdlib → third-party → local imports
-- Use `typing` for all function signatures
-- Maximum line length: 88 characters (black default)
+- Use `black` for code formatting (88 character line length)
+- Import order: stdlib → third-party → local imports (separate with blank lines)
+- Use absolute imports from package root: `from jesse_mcp.core.integrations import ...`
+- Maximum line length: 100 (flake8), 88 (black default)
+- Use double quotes for strings
+
+### Import Pattern Example
+```python
+import asyncio
+import logging
+from typing import Dict, List, Any, Optional
+
+import numpy as np
+
+from jesse_mcp.core.integrations import get_jesse_wrapper, JESSE_AVAILABLE
+```
+
+### Type Annotations
+- Use `typing` module for all function signatures
+- Use `Optional[T]` for nullable returns
+- Use `Dict[str, Any]` for flexible JSON-like structures
+- Use `List[T]` for typed lists
+- Use `Union[T1, T2]` for multiple types
+
+```python
+async def optimize(
+    self,
+    strategy: str,
+    symbol: str,
+    param_space: Dict[str, Dict[str, Any]],
+    metric: str = "total_return",
+) -> Dict[str, Any]:
+```
 
 ### Naming Conventions
-- Classes: `PascalCase` (e.g., `JesseMCPServer`)
-- Functions/variables: `snake_case` (e.g., `get_jesse_wrapper`)
-- Constants: `UPPER_SNAKE_CASE` (e.g., `JESSE_AVAILABLE`)
-- Private members: prefix with underscore (`_internal_method`)
+- Classes: `PascalCase` (e.g., `Phase3Optimizer`, `JesseWrapper`)
+- Functions/variables: `snake_case` (e.g., `get_optimizer`, `backtest_result`)
+- Constants: `UPPER_SNAKE_CASE` (e.g., `JESSE_AVAILABLE`, `OPTUNA_AVAILABLE`)
+- Private members: prefix with underscore (`_internal_method`, `_calculate_convergence`)
+- Module-level singletons: `_optimizer_instance`, `_initialized`
 
 ### Error Handling
-- Use try/except blocks for optional imports
+- Use try/except blocks for optional imports with fallback behavior
 - Log warnings with `logger.warning()` when dependencies unavailable
-- Return `None` or empty dict for failed operations
-- Use `Optional[T]` typing for nullable returns
+- Return `{"error": str(e), "error_type": type(e).__name__}` for tool errors
+- Never let exceptions bubble up from MCP tool handlers
+- Use custom exception classes for domain errors (e.g., `JesseIntegrationError`)
 
-### Testing
-- Use `pytest-asyncio` for async tests
-- Test files: `test_*.py` in tests/ directory
+```python
+try:
+    from jesse_mcp.core.integrations import get_jesse_wrapper, JESSE_AVAILABLE
+except ImportError:
+    JESSE_AVAILABLE = False
+    get_jesse_wrapper = None
+```
+
+### Logging
+- Use module-level logger: `logger = logging.getLogger("jesse-mcp.phase3")`
+- Log levels: `logger.info()` for operations, `logger.warning()` for fallbacks, `logger.error()` for failures
+- Use emoji prefixes in logs: ✅ success, ❌ failure, ⚠️ warning, 🔬 analysis
+
+### Documentation
+- Use triple-quote docstrings for classes and public methods
+- Include Args, Returns, and Raises sections in docstrings
+- Document parameter format in docstrings (e.g., "Format: YYYY-MM-DD")
+
+```python
+def backtest(
+    self,
+    strategy: str,
+    start_date: str,
+    end_date: str,
+) -> Dict[str, Any]:
+    """
+    Run a backtest using Jesse's research module
+
+    Args:
+        strategy: Strategy name (must exist in strategies directory)
+        start_date: Start date "YYYY-MM-DD"
+        end_date: End date "YYYY-MM-DD"
+
+    Returns:
+        Dict with backtest results and metrics
+
+    Raises:
+        JesseIntegrationError: If Jesse framework is unavailable
+    """
+```
+
+## Testing Guidelines
+
+### Test Structure
+- Test files: `test_*.py` in `tests/` directory
+- Use `pytest` with `pytest-asyncio` for async tests
 - Mark async tests with `@pytest.mark.asyncio`
-- Use descriptive test names and print statements for debugging
+- Use descriptive test names: `test_optimize_with_mock_data`
+
+### Test Patterns
+```python
+import pytest
+
+@pytest.mark.asyncio
+async def test_tool_execution():
+    """Test description for debugging"""
+    try:
+        from fastmcp import Client
+        from fastmcp.client.transports import StdioTransport
+    except ImportError:
+        pytest.skip("FastMCP not installed")
+
+    transport = StdioTransport(command="python", args=["-m", "jesse_mcp"])
+    async with Client(transport) as client:
+        result = await client.call_tool("backtest", {...})
+        assert isinstance(result, dict)
+```
+
+### Test Assertions
+- Use descriptive assert messages
+- Use `pytest.skip()` for optional dependencies
+- Print debug info with `print()` statements (visible with `pytest -s`)
+
+## Architecture Patterns
+
+### Lazy Initialization
+Server module uses lazy initialization to allow testing without Jesse:
+```python
+jesse = None
+_initialized = False
+
+def _initialize_dependencies():
+    global jesse, _initialized
+    if _initialized:
+        return
+    # ... initialization logic
+    _initialized = True
+```
+
+### Singleton Pattern
+Use module-level singletons with getter functions:
+```python
+_optimizer_instance = None
+
+def get_optimizer(use_mock=None) -> Phase3Optimizer:
+    global _optimizer_instance
+    if _optimizer_instance is None:
+        _optimizer_instance = Phase3Optimizer(use_mock=use_mock)
+    return _optimizer_instance
+```
+
+### MCP Tool Registration
+Register tools using FastMCP decorators:
+```python
+mcp = FastMCP("jesse-mcp", version="1.0.0")
+
+@mcp.tool
+def backtest(strategy: str, ...) -> dict:
+    """Tool description shown to LLM agents"""
+    try:
+        # implementation
+        return result
+    except Exception as e:
+        logger.error(f"Backtest failed: {e}")
+        return {"error": str(e), "error_type": type(e).__name__}
+```
+
+### Mock Pattern
+Tools gracefully fall back to mock implementations:
+```python
+if not JESSE_AVAILABLE:
+    logger.warning("Jesse not available, using mock")
+    return self._mock_backtest(...)
+```
+
+## Project Structure
+
+```
+jesse_mcp/
+├── __init__.py          # Package exports
+├── __main__.py          # Entry point for python -m
+├── server.py            # FastMCP server with 17 tools
+├── cli.py               # Command-line interface
+├── optimizer.py         # Phase 3: Optimization tools
+├── risk_analyzer.py     # Phase 4: Risk analysis tools
+├── pairs_analyzer.py    # Phase 5: Pairs trading tools
+├── agent_tools.py       # Agent-specific tool extensions
+├── core/
+│   ├── __init__.py
+│   ├── integrations.py  # Jesse framework integration
+│   ├── jesse_rest_client.py  # REST API client
+│   └── mock.py          # Mock implementations
+├── agents/
+│   ├── __init__.py
+│   ├── base.py          # Base agent class
+│   ├── backtester.py    # Backtesting specialist
+│   └── risk_manager.py  # Risk management specialist
+└── config/
+    └── __init__.py      # Configuration management
+
+tests/
+├── __init__.py
+├── test_server.py       # MCP server tests
+├── test_optimizer.py    # Optimization tests
+├── test_risk_analyzer.py
+└── test_pairs_analyzer.py
+```
 
 ## Common Development Workflow
 
@@ -57,3 +271,43 @@ This includes:
 - MetaMCP integration and container restart
 - Troubleshooting and maintenance guidelines
 - Complete development cycle instructions
+
+## Key Dependencies
+
+- `fastmcp>=0.3.0` - MCP server framework
+- `numpy>=1.24.0` - Numerical computations
+- `pandas>=2.0.0` - Data manipulation
+- `scipy>=1.10.0` - Statistical functions
+- `scikit-learn>=1.3.0` - Machine learning utilities
+- `optuna>=3.0.0` (optional) - Hyperparameter optimization
+- `pydantic>=2.0.0` - Data validation
+
+## Python Version
+
+Requires Python >= 3.10 (uses modern type hint syntax)
+
+## Landing the Plane (Session Completion)
+
+**When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.
+
+**MANDATORY WORKFLOW:**
+
+1. **File issues for remaining work** - Create issues for anything that needs follow-up
+2. **Run quality gates** (if code changed) - Tests, linters, builds
+3. **Update issue status** - Close finished work, update in-progress items
+4. **PUSH TO REMOTE** - This is MANDATORY:
+   ```bash
+   git pull --rebase
+   bd sync
+   git push
+   git status  # MUST show "up to date with origin"
+   ```
+5. **Clean up** - Clear stashes, prune remote branches
+6. **Verify** - All changes committed AND pushed
+7. **Hand off** - Provide context for next session
+
+**CRITICAL RULES:**
+- Work is NOT complete until `git push` succeeds
+- NEVER stop before pushing - that leaves work stranded locally
+- NEVER say "ready to push when you are" - YOU must push
+- If push fails, resolve and retry until it succeeds

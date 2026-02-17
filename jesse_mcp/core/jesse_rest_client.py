@@ -19,7 +19,7 @@ from typing import Dict, Any, Optional
 logger = logging.getLogger("jesse-mcp.rest-client")
 
 # Get Jesse API configuration from environment
-JESSE_URL = os.getenv("JESSE_URL", "http://server2:8000")
+JESSE_URL = os.getenv("JESSE_URL", "http://localhost:9000")
 JESSE_PASSWORD = os.getenv("JESSE_PASSWORD", "")
 JESSE_API_TOKEN = os.getenv("JESSE_API_TOKEN", "")
 JESSE_API_BASE = JESSE_URL
@@ -162,15 +162,31 @@ class JesseRESTClient:
                 }
             ]
 
-            # Format config as Jesse expects
+            # Format config as Jesse 1.13.x expects
             config = {
                 "starting_balance": starting_balance,
                 "fee": fee,
                 "futures_leverage": leverage,
                 "type": exchange_type,
                 "warm_up_candles": 240,
+                "logging": {
+                    "balance": True,
+                    "trades": include_trades,
+                    "signals": False,
+                },
+                "exchanges": {
+                    exchange: {
+                        "name": exchange,
+                        "fee": fee,
+                        "type": exchange_type,
+                        "balance": starting_balance,
+                        "futures_leverage": int(leverage),
+                        "futures_leverage_mode": "cross",
+                    }
+                },
             }
 
+            # Jesse 1.13.x payload format
             payload = {
                 "id": str(uuid.uuid4()),
                 "exchange": exchange,
@@ -234,18 +250,80 @@ class JesseRESTClient:
         try:
             logger.info(f"Starting optimization via REST API: {strategy}")
 
-            payload = {
-                "strategy": strategy,
-                "symbol": symbol,
-                "timeframe": timeframe,
-                "start_date": start_date,
-                "end_date": end_date,
-                "param_space": param_space,
-                "exchange": exchange,
+            import uuid
+
+            # Format routes for Jesse 1.13.x
+            routes = [
+                {
+                    "exchange": exchange,
+                    "strategy": strategy,
+                    "symbol": symbol,
+                    "timeframe": timeframe,
+                }
+            ]
+
+            data_routes = [
+                {
+                    "exchange": exchange,
+                    "symbol": symbol,
+                    "timeframe": timeframe,
+                }
+            ]
+
+            config = {
                 "starting_balance": starting_balance,
                 "fee": fee,
                 "futures_leverage": leverage,
                 "type": exchange_type,
+                "warm_up_candles": 240,
+                "logging": {
+                    "balance": True,
+                    "trades": False,
+                    "signals": False,
+                },
+                "exchanges": {
+                    exchange: {
+                        "name": exchange,
+                        "fee": fee,
+                        "type": exchange_type,
+                        "balance": starting_balance,
+                        "futures_leverage": int(leverage),
+                        "futures_leverage_mode": "cross",
+                    }
+                },
+            }
+
+            # Convert param_space to Jesse's hyperparameters format
+            hyperparameters = []
+            for name, spec in param_space.items():
+                hp = {"name": name}
+                if spec.get("type") == "int":
+                    hp["type"] = "int"
+                    hp["min"] = spec.get("min", 1)
+                    hp["max"] = spec.get("max", 100)
+                    hp["default"] = spec.get("default", (hp["min"] + hp["max"]) // 2)
+                elif spec.get("type") == "float":
+                    hp["type"] = "float"
+                    hp["min"] = spec.get("min", 0.0)
+                    hp["max"] = spec.get("max", 1.0)
+                    hp["default"] = spec.get("default", (hp["min"] + hp["max"]) / 2)
+                else:
+                    hp["type"] = str(spec.get("type", "str"))
+                    hp["default"] = spec.get("default", "")
+                hyperparameters.append(hp)
+
+            # Jesse 1.13.x optimization payload
+            payload = {
+                "id": str(uuid.uuid4()),
+                "exchange": exchange,
+                "routes": routes,
+                "data_routes": data_routes,
+                "config": config,
+                "start_date": start_date,
+                "finish_date": end_date,
+                "hyperparameters": hyperparameters,
+                "n_trials": param_space.get("n_trials", 50),
+                "max_cpus": 1,
             }
 
             response = self.session.post(f"{self.base_url}/optimization", json=payload)

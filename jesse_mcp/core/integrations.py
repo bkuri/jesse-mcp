@@ -15,6 +15,7 @@ logger = logging.getLogger("jesse-mcp.integration")
 
 # Jesse paths - try multiple locations
 JESSE_PATHS = [
+    "/home/bk/source/jesse-bot",
     "/srv/containers/jesse",
     "/mnt/nfs/server1/containers/jesse",
 ]
@@ -46,7 +47,7 @@ def _check_jesse_ntfy_available() -> bool:
 # This allows jesse-mcp to work without importing Jesse dependencies
 JESSE_AVAILABLE = False
 JESSE_ERROR = None
-JESSE_API_URL = os.getenv("JESSE_URL", "http://localhost:8000")
+JESSE_API_URL = os.getenv("JESSE_URL", "http://localhost:9000")
 JESSE_RESEARCH_AVAILABLE = False  # Track if we can import Jesse's research module
 
 try:

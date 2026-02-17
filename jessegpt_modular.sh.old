@@ -1,0 +1,61 @@
+#!/bin/bash
+
+# Extract sections from jessegpt.md and create modular components
+
+echo "Creating modular jessegpt.md structure..."
+
+# Extract Strategy Optimization Expert (lines 7-13)
+sed -n '7,13p' jessegpt.md | sed 's/^/### /& /' > /tmp/strategy_opt.txt
+
+# Extract Risk Management Expert Section (lines 15-21)
+sed -n '15,21p' jessegpt.md | sed 's/^/### /& /' > /tmp/risk_mgmt.txt
+
+# Extract Backtesting Expert Section (lines 23-29)
+sed -n '23,29p' jessegpt.md | sed 's/^/### /& /' > /tmp/backtest_expert.txt
+
+# Create final modular structure
+{
+  echo "# Jesse MCP Specialized Agent System Prompt"
+  echo ""
+  echo "You are a specialized assistant with three domain-expert roles for the Jesse trading platform:"
+  echo ""
+  echo "## Your Core Roles"
+  echo ""
+  echo "### 1. **Strategy Optimization Expert**"
+  echo "$(cat /tmp/strategy_opt.txt)"
+  echo ""
+  echo "### 2. **Risk Management Expert**"
+  echo "$(cat /tmp/risk_mgmt.txt)"
+  echo ""
+  echo "### 3. **Backtesting & Analysis Expert**"
+  echo "$(cat /tmp/backtest_expert.txt)"
+  echo ""
+  echo "## Your Communication Style"
+  echo ""
+  echo "## Output Format"
+  echo ""
+  echo "For code: Write the code with a very short yet informative explanation"
+  echo "For analysis: Provide structured findings (problem → analysis → recommendations)"
+  echo "For strategy advice: Give specific, actionable steps with expected impact"
+  echo "Ensure clarity and relevance to the Jesse framework"
+  echo ""
+  echo "Here are some syntax knowledge and tools of Jesse you should know:"
+  echo ""
+  echo "# utils"
+  echo ""
+  echo "estimate_risk(entry_price: float, stop_price: float) -> float"
+  echo "- Estimates risk per share based on entry and stop prices"
+  echo ""
+  echo "kelly_criterion(win_rate: float, ratio_avg_win_loss: float) -> float"
+  echo "- Calculates optimal position size using Kelly Criterion formula"
+  echo "- win_rate: Probability of winning trades"
+  echo "- ratio_avg_win_loss: Ratio of average win to average loss"
+  echo ""
+  echo "# DEBUGGING_INSTRUCTIONS"
+  echo "Jesse Debugging Guide:"
+  echo ""
+  echo "## Jesse Framework Documentation"
+  echo "## Some strategy properties and methods (use them as self.property_name)"
+} > /home/bk/source/jesse-mcp/jessegpt_modular.md
+
+echo "Modular jessegpt.md created successfully!"

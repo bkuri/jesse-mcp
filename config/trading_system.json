@@ -1,0 +1,176 @@
+{
+  "global_risk_profile": "moderate",
+  "global_risk_settings": {
+    "max_portfolio_risk": 0.02,
+    "max_position_size": 0.10,
+    "max_leverage": 2.0,
+    "max_drawdown": 0.15,
+    "stop_loss": 0.02,
+    "take_profit": 0.04,
+    "max_correlation": 0.7,
+    "var_confidence": 0.95,
+    "emergency_stop": 0.25
+  },
+  "news_priorities": [
+    {
+      "source": "reuters",
+      "priority": 1,
+      "weight": 0.25,
+      "enabled": true,
+      "filters": ["crypto", "bitcoin", "ethereum", "blockchain"]
+    },
+    {
+      "source": "bloomberg",
+      "priority": 2,
+      "weight": 0.20,
+      "enabled": true,
+      "filters": ["market", "trading", "digital-assets"]
+    },
+    {
+      "source": "coindesk",
+      "priority": 3,
+      "weight": 0.15,
+      "enabled": true,
+      "filters": []
+    },
+    {
+      "source": "cryptopanic",
+      "priority": 4,
+      "weight": 0.15,
+      "enabled": true,
+      "filters": ["high", "medium"]
+    },
+    {
+      "source": "twitter",
+      "priority": 5,
+      "weight": 0.10,
+      "enabled": true,
+      "filters": ["verified", "crypto-influencers"]
+    },
+    {
+      "source": "reddit",
+      "priority": 6,
+      "weight": 0.10,
+      "enabled": true,
+      "filters": ["cryptocurrency", "bitcoin"]
+    },
+    {
+      "source": "telegram",
+      "priority": 7,
+      "weight": 0.05,
+      "enabled": false,
+      "filters": []
+    }
+  ],
+  "portfolio_limits": {
+    "max_total_positions": 10,
+    "max_open_positions": 5,
+    "max_daily_trades": 20,
+    "max_weekly_trades": 50,
+    "max_monthly_trades": 200,
+    "position_timeout_hours": 72,
+    "min_account_balance": 1000,
+    "max_account_usage": 0.95
+  },
+  "strategies": {
+    "trend_following": {
+      "risk_profile": "moderate",
+      "enabled": true,
+      "stage": "exploration",
+      "news_priorities": [
+        {
+          "source": "reuters",
+          "priority": 1,
+          "weight": 0.3,
+          "enabled": true,
+          "filters": []
+        },
+        {
+          "source": "bloomberg",
+          "priority": 2,
+          "weight": 0.25,
+          "enabled": true,
+          "filters": []
+        }
+      ],
+      "custom_params": {
+        "trend_period": 20,
+        "entry_threshold": 0.02,
+        "exit_threshold": 0.01
+      }
+    },
+    "mean_reversion": {
+      "risk_profile": "conservative",
+      "risk_overrides": {
+        "max_position_size": 0.05,
+        "max_leverage": 1.0,
+        "stop_loss": 0.015,
+        "take_profit": 0.025
+      },
+      "enabled": true,
+      "stage": "paper",
+      "news_priorities": [
+        {
+          "source": "coindesk",
+          "priority": 1,
+          "weight": 0.4,
+          "enabled": true,
+          "filters": []
+        }
+      ],
+      "custom_params": {
+        "lookback_period": 14,
+        "zscore_threshold": 2.0,
+        "holding_period": 24
+      }
+    },
+    "momentum": {
+      "risk_profile": "aggressive",
+      "risk_overrides": {
+        "max_position_size": 0.15,
+        "max_leverage": 3.0,
+        "stop_loss": 0.03,
+        "take_profit": 0.06
+      },
+      "enabled": false,
+      "stage": "exploration",
+      "news_priorities": [
+        {
+          "source": "cryptopanic",
+          "priority": 1,
+          "weight": 0.5,
+          "enabled": true,
+          "filters": ["high"]
+        },
+        {
+          "source": "twitter",
+          "priority": 2,
+          "weight": 0.3,
+          "enabled": true,
+          "filters": []
+        }
+      ],
+      "custom_params": {
+        "momentum_period": 10,
+        "volume_threshold": 1.5,
+        "breakout_confirmation": true
+      }
+    }
+  },
+  "stage": "exploration",
+  "zai_glm_config": {
+    "api_endpoint": "https://api.z.ai/v1",
+    "model": "glm-4x",
+    "max_tokens": 2000,
+    "temperature": 0.7,
+    "api_key": "${ZAI_API_KEY}"
+  },
+  "mcp_config": {
+    "jesse_host": "localhost",
+    "jesse_port": 8000,
+    "asset_price_host": "localhost",
+    "asset_price_port": 8001,
+    "discovery_host": "localhost",
+    "discovery_port": 8002
+  }
+}

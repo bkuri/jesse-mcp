@@ -1,0 +1,16 @@
+[Unit]
+Description=Jesse MCP Agent B - Backtesting & Analysis
+After=network.target
+
+[Service]
+Type=simple
+User=bk
+WorkingDirectory=/home/bk/source/jesse-mcp
+ExecStart=/usr/bin/opencode run "Execute Agent B section from PRD_v1.0.0.md. Focus on comprehensive backtesting, performance analysis, and statistical validation. Use backtest, backtest_batch, analyze_results, correlation_matrix." -m zai-coding-plan/glm-4.5-flash
+StandardOutput=append:/home/bk/source/jesse-mcp/logs/agent-b.log
+StandardError=append:/home/bk/source/jesse-mcp/logs/agent-b.log
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target

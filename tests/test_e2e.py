@@ -71,7 +71,7 @@ class E2ETestSuite:
         async with Client(get_client_transport()) as client:
             tools = await client.list_tools()
             total_tools = len(tools)
-            tool_names = {t["name"] for t in tools}
+            tool_names = {t.name for t in tools}
 
             expected_tools = {
                 "backtest",
@@ -99,7 +99,7 @@ class E2ETestSuite:
             extra = available - expected
 
             print(f"  Total tools: {total_tools}")
-            print(f"  Expected: {len(expected_tools)}")
+            print(f"  Expected core: {len(expected_tools)}")
             print(f"  Available: {len(available)}")
 
             if missing:
@@ -110,9 +110,9 @@ class E2ETestSuite:
             if extra:
                 print(f"  ⚠️  Extra tools: {sorted(extra)}")
 
-            success = len(available) == 17
+            success = expected.issubset(available)
             status = "✅ PASS" if success else "❌ FAIL"
-            print(f"\n  {status}: All 17 tools available")
+            print(f"\n  {status}: All 17 core tools available")
 
             self.results.append(("Tool Availability", success))
 
@@ -147,7 +147,8 @@ class E2ETestSuite:
             try:
                 async with Client(get_client_transport()) as client:
                     result = await client.call_tool(tool_name, args)
-                    has_error = "error" in result and result["error"] is not None
+                    data = result.data if hasattr(result, "data") else result
+                    has_error = "error" in data and data["error"] is not None
                     status = "✅" if not has_error else "❌"
                     print(f"  {status} {description}: {tool_name}")
                     if not has_error:
@@ -168,10 +169,16 @@ class E2ETestSuite:
             pytest.skip("FastMCP not installed")
 
         # Test optimization workflow
+        workflow_success = False
         try:
             async with Client(get_client_transport()) as client:
                 # Step 1: Get strategies
-                strategies = await client.call_tool("strategy_list", {})
+                strategies_result = await client.call_tool("strategy_list", {})
+                strategies = (
+                    strategies_result.data
+                    if hasattr(strategies_result, "data")
+                    else strategies_result
+                )
 
                 # Step 2: Run optimization (will fail gracefully without Jesse)
                 opt_result = await client.call_tool(
@@ -236,7 +243,8 @@ class E2ETestSuite:
             try:
                 async with Client(get_client_transport()) as client:
                     result = await client.call_tool(test["tool"], test["args"])
-                    has_error = "error" in result and result["error"] is not None
+                    data = result.data if hasattr(result, "data") else result
+                    has_error = "error" in data and data["error"] is not None
 
                     if test["expect_error"] and has_error:
                         print(f"  ✅ {test['name']}: Correctly reported error")

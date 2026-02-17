@@ -2,134 +2,224 @@
 
 An MCP (Model Context Protocol) server that exposes Jesse's algorithmic trading framework capabilities to LLM agents.
 
+## Status: Feature Complete ✅
+
+All planned features implemented and tested. 32 tools available (17 core + 15 agent).
+
 ## Quick Start
 
 ```bash
 # Install dependencies
 pip install -r requirements.txt
 
-# Run server
-python server.py
+# Run server (stdio transport)
+python -m jesse_mcp
+
+# Run server (HTTP transport for opencode integration)
+python -m jesse_mcp --transport http --port 8100
 ```
 
 ## Features
 
-- **Backtesting** - Single and batch backtest execution
+- **Backtesting** - Single and batch backtest execution via Jesse REST API
 - **Optimization** - Hyperparameter tuning with walk-forward validation  
 - **Monte Carlo Analysis** - Statistical robustness testing
 - **Pairs Trading** - Cointegration testing and strategy generation
 - **Strategy Management** - CRUD operations for trading strategies
-- **Data Management** - Candle import and availability checking
-
-## Documentation
-
-See [PRD](docs/PRD.md) for complete specifications. Other documents are also available in that folder (in fact, some cleanup may be required).
+- **Risk Analysis** - VaR, stress testing, comprehensive risk reports
+- **Agent Tools** - 15 specialized tools for autonomous trading workflows
 
 ## Architecture
 
 ```
-LLM Agent ←→ MCP Protocol ←→ jesse-mcp ←→ Jesse Research Module
+LLM Agent ←→ MCP Protocol ←→ jesse-mcp ←→ Jesse REST API (localhost:9000)
+                                    ↓
+                            Mock Fallbacks (when Jesse unavailable)
 ```
 
-## Development
+## Available Tools (32 Total)
 
-Based on PRD, implementation phases:
+### Core Tools (17)
 
-- **Phase 1**: Core Foundation (backtest, strategy tools)
-- **Phase 2**: Optimization (hyperparameter tuning)
-- **Phase 3**: Data Management (candle operations)
-- **Phase 4**: Analysis & Intelligence (metrics, indicators)
-- **Phase 5**: Monte Carlo & Statistical Analysis
-- **Phase 6**: Pairs Trading
-- **Phase 7**: Autonomous Workflows
-- **Phase 8**: Polish & Documentation
+#### Phase 1: Backtesting
+| Tool | Description |
+|------|-------------|
+| `backtest` | Run single backtest with specified parameters |
+| `strategy_list` | List available strategies |
+| `strategy_read` | Read strategy source code |
+| `strategy_validate` | Validate strategy code |
 
-## Deployment & Infrastructure
+#### Phase 2: Data & Analysis
+| Tool | Description |
+|------|-------------|
+| `candles_import` | Download candle data from exchanges |
+| `backtest_batch` | Run concurrent multi-asset backtests |
+| `analyze_results` | Extract insights from backtest results |
+| `walk_forward` | Walk-forward analysis for overfitting detection |
 
-### MetaMCP Integration
-- **Status**: ✅ **DEPLOYED AND FUNCTIONAL**
-- **Location**: Server2 (`server2-auto`)
-- **Container**: Running as `/srv/containers/metamcp/mcp-servers/jesse-mcp/`
-- **Network**: Host networking mode (no port exposure)
-- **Dependencies**: All required packages installed (numpy, pandas, scikit-learn, scipy, optuna)
-
-### Environment Setup
-```bash
-# Jesse Framework Location
-/srv/containers/jesse/  # Full Jesse installation with trading capabilities
-
-# MetaMCP Integration Path  
-/srv/containers/metamcp/mcp-servers/jesse-mcp/  # MCP server deployment
-
-# Python Environment
-PYTHONPATH="/srv/containers/jesse:/mnt/jesse-mcp:${PYTHONPATH}"
-```
-
-### Available Tools (17 Total)
-
-#### Phase 1: Backtesting Fundamentals
-1. **backtest** - Run single backtest with specified parameters
-2. **strategy_list** - List available strategies  
-3. **strategy_read** - Read strategy source code
-4. **strategy_validate** - Validate strategy code without saving
-
-#### Phase 2: Data & Analysis  
-5. **candles_import** - Download candle data from exchanges
-6. **backtest_batch** - Run concurrent multi-asset backtests
-7. **analyze_results** - Extract deep insights from backtest results
-8. **walk_forward** - Perform walk-forward analysis to detect overfitting
-
-#### Phase 3: Advanced Optimization
-9. **optimize** - Optimize strategy hyperparameters using Optuna
-10. **backtest_batch** - Run multiple backtests concurrently for strategy comparison
-11. **analyze_results** - Extract deep insights from backtest results
-12. **walk_forward** - Perform walk-forward analysis to detect overfitting
+#### Phase 3: Optimization
+| Tool | Description |
+|------|-------------|
+| `optimize` | Optimize hyperparameters using Optuna |
 
 #### Phase 4: Risk Analysis
-13. **monte_carlo** - Generate Monte Carlo simulations for comprehensive risk analysis
-14. **var_calculation** - Calculate Value at Risk using multiple methods
-15. **stress_test** - Test strategy performance under extreme market scenarios
-16. **risk_report** - Generate comprehensive risk assessment and recommendations
+| Tool | Description |
+|------|-------------|
+| `monte_carlo` | Monte Carlo simulations for risk analysis |
+| `var_calculation` | Value at Risk (historical, parametric, Monte Carlo) |
+| `stress_test` | Test under extreme market scenarios |
+| `risk_report` | Comprehensive risk assessment |
 
-#### Phase 5: Pairs Trading & Regime Analysis
-17. **correlation_matrix** - Analyze cross-asset correlations and identify pairs trading opportunities
-18. **pairs_backtest** - Backtest pairs trading strategies
-19. **factor_analysis** - Decompose returns into systematic factors
-20. **regime_detector** - Identify market regimes and transitions
+#### Phase 5: Pairs Trading
+| Tool | Description |
+|------|-------------|
+| `correlation_matrix` | Cross-asset correlation analysis |
+| `pairs_backtest` | Backtest pairs trading strategies |
+| `factor_analysis` | Decompose returns into systematic factors |
+| `regime_detector` | Identify market regimes and transitions |
 
-### Testing Status
-- **Phase 1**: ✅ **COMPLETE** - 6/6 test categories passing
-- **Performance**: <100ms tool listing, <1ms execution
-- **Integration**: ✅ MetaMCP functional with all 17 tools accessible
-- **Error Handling**: ✅ Graceful fallback to mock implementations when Jesse unavailable
+### Agent Tools (15)
 
-### Known Issues & Solutions
-1. **Jesse Integration**: Framework detected but extensive dependency chain missing
-   - **Issue**: Missing dependencies: redis, simplejson, arrow, timeloop, pydash, peewee, numba, statsmodels, jesse_rust
-   - **Current Status**: Phase 3-5 tools fully functional with mock implementations
-   - **Phase 1-2 Tools**: Using graceful fallback to mocks (expected behavior)
-   - **Solution**: Mock implementations provide reliable testing without full Jesse dependency chain
-   - **Impact**: Low - All 17 tools operational, Phase 1-2 use synthetic data
+Specialized tools for autonomous trading workflows:
 
-2. **MetaMCP Network**: Host networking mode (internal access only)
-   - **Issue**: No external port exposure for direct access
-   - **Solution**: Access through MetaMCP interface or internal container networking
-   - **Impact**: None for intended use case
+| Tool | Description |
+|------|-------------|
+| `strategy_suggest_improvements` | AI-powered strategy enhancement suggestions |
+| `strategy_compare_strategies` | Compare multiple strategies side-by-side |
+| `strategy_optimize_pair_selection` | Optimize pairs trading selection |
+| `strategy_analyze_optimization_impact` | Analyze impact of optimization changes |
+| `risk_analyze_portfolio` | Portfolio-level risk analysis |
+| `risk_stress_test` | Advanced stress testing |
+| `risk_assess_leverage` | Leverage risk assessment |
+| `risk_recommend_hedges` | Hedging recommendations |
+| `risk_analyze_drawdown_recovery` | Drawdown recovery analysis |
+| `backtest_comprehensive` | Full backtest with all metrics |
+| `backtest_compare_timeframes` | Compare performance across timeframes |
+| `backtest_optimize_parameters` | Quick parameter optimization |
+| `backtest_monte_carlo` | Backtest with Monte Carlo analysis |
+| `backtest_analyze_regimes` | Regime-aware backtest analysis |
+| `backtest_validate_significance` | Statistical significance validation |
 
-3. **Container Disk Quota**: MetaMCP container restart issues
-   - **Issue**: Container disk quota preventing restarts
-   - **Current Status**: Container running, jesse-mcp functional
-   - **Solution**: Manual container management when needed
-   - **Impact**: Low - Operational functionality unaffected
+## Testing
 
-### Access Methods
 ```bash
-# Direct MCP Protocol (within MetaMCP environment)
-echo '{"method": "tools/list", "params": {}}' | python -m jesse_mcp
+# Run all tests
+JESSE_URL=http://localhost:9000 JESSE_PASSWORD=test pytest -v
 
-# Through MetaMCP (recommended)
-# Access via MetaMCP dashboard or API endpoints
-# Tools automatically discovered and routed by MetaMCP
+# Run single test
+pytest tests/test_server.py::test_tools_list -v
+```
+
+**Status:** 12/12 tests passing
+
+## Local Development
+
+### Prerequisites
+- Python 3.10+
+- Jesse 1.13.x running on localhost:9000
+- PostgreSQL on localhost:5432
+- Redis on localhost:6379
+
+### Start Jesse Stack (Podman)
+```bash
+# Start infrastructure
+podman run -d --name jesse-postgres --network host \
+  -e POSTGRES_USER=jesse_user -e POSTGRES_PASSWORD=password -e POSTGRES_DB=jesse_db \
+  docker.io/library/postgres:14-alpine
+
+podman run -d --name jesse-redis --network host \
+  docker.io/library/redis:6-alpine redis-server --save "" --appendonly no
+
+# Start Jesse
+podman run -d --name jesse --network host \
+  -v /path/to/jesse-bot:/home:z \
+  docker.io/salehmir/jesse:latest bash -c "cd /home && jesse run"
+```
+
+### Start Dev MCP Server
+```bash
+./scripts/start-dev-server.sh   # Start on port 8100
+./scripts/stop-dev-server.sh    # Stop server
+```
+
+### Add to OpenCode
+Add to `~/.config/opencode/opencode.json`:
+```json
+{
+  "mcp": {
+    "jesse-mcp-dev": {
+      "type": "remote",
+      "url": "http://localhost:8100/mcp",
+      "enabled": true
+    }
+  }
+}
+```
+
+## Documentation
+
+- [Using with LLMs](docs/USING_WITH_LLMS.md) - How to use with MCP-compatible LLMs
+- [Production Deployment](docs/PRODUCTION_DEPLOYMENT.md) - Production deployment guide
+- [Jesse Setup](docs/JESSE_SETUP.md) - Jesse integration setup
+- [Agent System](docs/AGENT_SYSTEM.md) - Agent architecture
+- [AGENTS.md](AGENTS.md) - Development guidelines for AI agents
+
+## API Reference
+
+### Jesse REST Client
+
+The `jesse_rest_client.py` module provides direct access to Jesse's REST API:
+
+```python
+from jesse_mcp.core.jesse_rest_client import get_jesse_rest_client
+
+client = get_jesse_rest_client()
+
+# Run backtest
+result = client.backtest(
+    strategy="OctopusStrategy",
+    symbol="BTC-USDT", 
+    timeframe="1h",
+    start_date="2024-01-01",
+    end_date="2024-01-31"
+)
+```
+
+### Mock Implementations
+
+When Jesse is unavailable, all tools gracefully fall back to mock implementations that return realistic synthetic data. This enables development and testing without a full Jesse installation.
+
+## Key Dependencies
+
+| Package | Version | Purpose |
+|---------|---------|---------|
+| fastmcp | >=0.3.0 | MCP server framework |
+| numpy | >=1.24.0 | Numerical computations |
+| pandas | >=2.0.0 | Data manipulation |
+| scipy | >=1.10.0 | Statistical functions |
+| scikit-learn | >=1.3.0 | ML utilities |
+| optuna | >=3.0.0 | Hyperparameter optimization |
+
+## Project Structure
+
+```
+jesse_mcp/
+├── server.py            # FastMCP server with 17 core tools
+├── optimizer.py         # Phase 3: Optimization tools
+├── risk_analyzer.py     # Phase 4: Risk analysis tools
+├── pairs_analyzer.py    # Phase 5: Pairs trading tools
+├── agent_tools.py       # 15 agent-specific tools
+├── core/
+│   ├── integrations.py  # Jesse framework integration
+│   ├── jesse_rest_client.py  # REST API client
+│   └── mock.py          # Mock implementations
+├── agents/
+│   ├── base.py          # Base agent class
+│   ├── backtester.py    # Backtesting specialist
+│   └── risk_manager.py  # Risk management specialist
+└── scripts/
+    ├── start-dev-server.sh
+    └── stop-dev-server.sh
 ```
 
 ## License

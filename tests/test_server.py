@@ -11,7 +11,7 @@ import asyncio
 
 @pytest.mark.asyncio
 async def test_tools_list():
-    """Test that all 17 tools are discoverable"""
+    """Test that all core tools are discoverable"""
     try:
         from fastmcp import Client
         from fastmcp.client.transports import StdioTransport
@@ -22,12 +22,12 @@ async def test_tools_list():
     async with Client(transport) as client:
         tools = await client.list_tools()
 
-        # Verify count
-        assert len(tools) == 17, f"Expected 17 tools, got {len(tools)}"
+        # Verify we have at least the core 17 tools (may have more with agent tools)
+        assert len(tools) >= 17, f"Expected at least 17 tools, got {len(tools)}"
 
-        # Verify tool names
+        # Verify core tool names are present
         tool_names = {t.name for t in tools}
-        expected_tools = {
+        core_tools = {
             # Phase 1: Backtesting
             "backtest",
             "strategy_list",
@@ -50,11 +50,13 @@ async def test_tools_list():
             "factor_analysis",
             "regime_detector",
         }
-        assert expected_tools == tool_names, (
-            f"Tool mismatch. Expected: {expected_tools}, Got: {tool_names}"
+        assert core_tools.issubset(tool_names), (
+            f"Missing core tools. Expected subset: {core_tools}, Got: {tool_names}"
         )
 
-        print(f"✅ All {len(tools)} tools discovered successfully")
+        print(
+            f"✅ All {len(tools)} tools discovered successfully (17 core + {len(tools) - 17} agent)"
+        )
 
 
 @pytest.mark.asyncio
@@ -79,10 +81,11 @@ async def test_backtest_tool():
             },
         )
 
-        assert isinstance(result, dict), f"Expected dict, got {type(result)}"
+        data = result.data if hasattr(result, "data") else result
+        assert isinstance(data, dict), f"Expected dict, got {type(data)}"
         # Tool should return a result (may contain error if Jesse unavailable)
-        assert "error" in result or "total_return" in result or "status" in result
-        print(f"✅ Backtest tool responded: {result.get('status', 'executed')}")
+        assert "error" in data or "total_return" in data or "status" in data
+        print(f"✅ Backtest tool responded: {data.get('status', 'executed')}")
 
 
 @pytest.mark.asyncio
@@ -98,8 +101,10 @@ async def test_strategy_list_tool():
     async with Client(transport) as client:
         result = await client.call_tool("strategy_list", {})
 
-        assert isinstance(result, dict), f"Expected dict, got {type(result)}"
-        print(f"✅ Strategy list tool responded")
+        # FastMCP 2.x returns CallToolResult with .data containing the dict
+        data = result.data if hasattr(result, "data") else result
+        assert isinstance(data, dict), f"Expected dict, got {type(data)}"
+        print(f"✅ Strategy list tool responded: {data.get('count', 0)} strategies")
 
 
 @pytest.mark.asyncio
@@ -125,7 +130,8 @@ async def test_optimize_tool():
             },
         )
 
-        assert isinstance(result, dict)
+        data = result.data if hasattr(result, "data") else result
+        assert isinstance(data, dict)
         print(f"✅ Optimize tool responded (async)")
 
 
@@ -140,7 +146,7 @@ async def test_monte_carlo_tool():
 
     transport = StdioTransport(command="python", args=["-m", "jesse_mcp"])
     async with Client(transport) as client:
-        mock_result = {"trades": [], "metrics": {}}
+        mock_result = {"trades": [], "metrics": {}, "equity_curve": []}
         result = await client.call_tool(
             "monte_carlo",
             {
@@ -149,7 +155,8 @@ async def test_monte_carlo_tool():
             },
         )
 
-        assert isinstance(result, dict)
+        data = result.data if hasattr(result, "data") else result
+        assert isinstance(data, dict)
         print(f"✅ Monte Carlo tool responded")
 
 
