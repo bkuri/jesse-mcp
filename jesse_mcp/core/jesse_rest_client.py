@@ -12,9 +12,10 @@ Configuration (via MetaMCP MCP Servers panel):
 """
 
 import os
+import re
 import requests
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 from jesse_mcp.core.rate_limiter import get_rate_limiter
 from jesse_mcp.core.cache import (
@@ -30,6 +31,141 @@ JESSE_URL = os.getenv("JESSE_URL", "http://localhost:9000")
 JESSE_PASSWORD = os.getenv("JESSE_PASSWORD", "")
 JESSE_API_TOKEN = os.getenv("JESSE_API_TOKEN", "")
 JESSE_API_BASE = JESSE_URL
+
+EXCHANGE_CONFIG: Dict[str, Dict[str, Any]] = {
+    "Binance": {
+        "symbol_pattern": r"^[A-Z]{2,10}-[A-Z]{3,5}$",
+        "symbol_format": "BTC-USDT",
+        "timeframes": [
+            "1m",
+            "3m",
+            "5m",
+            "15m",
+            "30m",
+            "1h",
+            "2h",
+            "4h",
+            "6h",
+            "8h",
+            "12h",
+            "1d",
+            "3d",
+            "1w",
+            "1M",
+        ],
+        "supports_futures": True,
+        "supports_spot": True,
+        "api_prefix": None,
+    },
+    "Bybit": {
+        "symbol_pattern": r"^[A-Z]{3,10}[A-Z]{3,5}$",
+        "symbol_format": "BTCUSDT",
+        "timeframes": [
+            "1m",
+            "3m",
+            "5m",
+            "15m",
+            "30m",
+            "1h",
+            "2h",
+            "4h",
+            "6h",
+            "12h",
+            "1d",
+            "1w",
+            "1M",
+        ],
+        "supports_futures": True,
+        "supports_spot": True,
+        "api_prefix": None,
+    },
+    "OKX": {
+        "symbol_pattern": r"^[A-Z]{2,10}-[A-Z]{3,5}(-[A-Z]{3,10})?$",
+        "symbol_format": "BTC-USDT-SWAP",
+        "timeframes": [
+            "1m",
+            "3m",
+            "5m",
+            "15m",
+            "30m",
+            "1h",
+            "2h",
+            "4h",
+            "6h",
+            "12h",
+            "1d",
+            "1w",
+            "1M",
+        ],
+        "supports_futures": True,
+        "supports_spot": True,
+        "api_prefix": None,
+    },
+    "Coinbase": {
+        "symbol_pattern": r"^[A-Z]{2,10}-[A-Z]{3,4}$",
+        "symbol_format": "BTC-USD",
+        "timeframes": ["1m", "5m", "15m", "1h", "6h", "1d"],
+        "supports_futures": False,
+        "supports_spot": True,
+        "api_prefix": None,
+    },
+    "Gate": {
+        "symbol_pattern": r"^[A-Z]{2,10}_[A-Z]{3,5}$",
+        "symbol_format": "BTC_USDT",
+        "timeframes": ["1m", "5m", "15m", "30m", "1h", "4h", "8h", "1d", "1w", "1M"],
+        "supports_futures": True,
+        "supports_spot": True,
+        "api_prefix": None,
+    },
+    "Hyperliquid": {
+        "symbol_pattern": r"^[A-Z]{2,10}$",
+        "symbol_format": "BTC",
+        "timeframes": [
+            "1m",
+            "3m",
+            "5m",
+            "15m",
+            "30m",
+            "1h",
+            "2h",
+            "4h",
+            "6h",
+            "12h",
+            "1d",
+        ],
+        "supports_futures": True,
+        "supports_spot": False,
+        "api_prefix": None,
+    },
+    "Apex": {
+        "symbol_pattern": r"^[A-Z]{2,10}-[A-Z]{3,5}$",
+        "symbol_format": "BTC-USDT",
+        "timeframes": ["1m", "5m", "15m", "30m", "1h", "4h", "1d"],
+        "supports_futures": True,
+        "supports_spot": False,
+        "api_prefix": None,
+    },
+    "Bitfinex": {
+        "symbol_pattern": r"^[tT][A-Z]{3,6}[A-Z]{3,6}$|^[A-Z]{2,6}/[A-Z]{3,6}$",
+        "symbol_format": "tBTCUST",
+        "timeframes": [
+            "1m",
+            "5m",
+            "15m",
+            "30m",
+            "1h",
+            "3h",
+            "6h",
+            "12h",
+            "1d",
+            "1w",
+            "1M",
+        ],
+        "supports_futures": True,
+        "supports_spot": True,
+        "api_prefix": None,
+    },
+}
 
 
 class JesseRESTClient:
@@ -886,6 +1022,115 @@ class JesseRESTClient:
         except Exception as e:
             logger.error(f"❌ Failed to get supported symbols: {e}")
             return {"error": str(e), "symbols": []}
+
+    @staticmethod
+    def list_supported_exchanges() -> List[str]:
+        """
+        Get list of supported exchanges.
+
+        Returns:
+            List of exchange names
+        """
+        return list(EXCHANGE_CONFIG.keys())
+
+    @staticmethod
+    def get_exchange_config(exchange: str) -> Dict[str, Any]:
+        """
+        Get configuration for a specific exchange.
+
+        Args:
+            exchange: Exchange name
+
+        Returns:
+            Dict with exchange config or error if not found
+        """
+        config = EXCHANGE_CONFIG.get(exchange)
+        if config is None:
+            return {
+                "error": f"Unknown exchange: {exchange}",
+                "valid_exchanges": list(EXCHANGE_CONFIG.keys()),
+            }
+        return {"exchange": exchange, **config}
+
+    @staticmethod
+    def validate_symbol(exchange: str, symbol: str) -> Dict[str, Any]:
+        """
+        Validate a trading symbol format for a specific exchange.
+
+        Args:
+            exchange: Exchange name
+            symbol: Trading symbol to validate
+
+        Returns:
+            Dict with validation result and details
+        """
+        config = EXCHANGE_CONFIG.get(exchange)
+        if config is None:
+            return {
+                "valid": False,
+                "error": f"Unknown exchange: {exchange}",
+                "valid_exchanges": list(EXCHANGE_CONFIG.keys()),
+            }
+
+        pattern = config.get("symbol_pattern", "")
+        if not pattern:
+            return {
+                "valid": True,
+                "warning": "No validation pattern defined for this exchange",
+                "symbol": symbol,
+                "expected_format": config.get("symbol_format"),
+            }
+
+        if re.match(pattern, symbol):
+            logger.info(f"✅ Symbol validated: {symbol} for {exchange}")
+            return {
+                "valid": True,
+                "symbol": symbol,
+                "exchange": exchange,
+                "expected_format": config.get("symbol_format"),
+            }
+        else:
+            logger.warning(f"⚠️ Invalid symbol format: {symbol} for {exchange}")
+            return {
+                "valid": False,
+                "error": f"Symbol '{symbol}' does not match expected format for {exchange}",
+                "symbol": symbol,
+                "exchange": exchange,
+                "expected_format": config.get("symbol_format"),
+                "pattern": pattern,
+            }
+
+    @staticmethod
+    def validate_timeframe(exchange: str, timeframe: str) -> Dict[str, Any]:
+        """
+        Validate a timeframe for a specific exchange.
+
+        Args:
+            exchange: Exchange name
+            timeframe: Timeframe to validate (e.g., "1h", "4h", "1d")
+
+        Returns:
+            Dict with validation result
+        """
+        config = EXCHANGE_CONFIG.get(exchange)
+        if config is None:
+            return {
+                "valid": False,
+                "error": f"Unknown exchange: {exchange}",
+                "valid_exchanges": list(EXCHANGE_CONFIG.keys()),
+            }
+
+        supported = config.get("timeframes", [])
+        if timeframe in supported:
+            return {"valid": True, "timeframe": timeframe, "exchange": exchange}
+        else:
+            return {
+                "valid": False,
+                "error": f"Timeframe '{timeframe}' not supported by {exchange}",
+                "timeframe": timeframe,
+                "exchange": exchange,
+                "supported_timeframes": supported,
+            }
 
     def get_backtest_sessions(self) -> Dict[str, Any]:
         """Get list of backtest sessions"""
