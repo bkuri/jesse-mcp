@@ -583,23 +583,28 @@ class JesseRESTClient:
         symbol: str,
         start_date: str,
         end_date: Optional[str] = None,
+        async_mode: bool = False,
     ) -> Dict[str, Any]:
         """
-        Import candle data via REST API
+        Import candle data from exchange via Jesse REST API.
+
+        This is a long-running operation. Jesse returns progress info
+        that can be polled to track import status.
 
         Args:
-            exchange: Exchange name
-            symbol: Trading symbol
-            start_date: Start date
-            end_date: End date (optional)
+            exchange: Exchange name (e.g., "Binance")
+            symbol: Trading symbol (e.g., "BTC-USDT")
+            start_date: Start date in YYYY-MM-DD format
+            end_date: End date in YYYY-MM-DD format (optional, defaults to now)
+            async_mode: If True, return immediately without waiting for completion
 
         Returns:
-            Import results dict
+            Dict with import status, progress info, or error details
         """
         try:
-            logger.info(f"Importing candles via REST API: {exchange} {symbol}")
+            logger.info(f"📥 Importing candles: {exchange} {symbol} from {start_date}")
 
-            payload = {
+            payload: Dict[str, Any] = {
                 "exchange": exchange,
                 "symbol": symbol,
                 "start_date": start_date,
@@ -608,17 +613,279 @@ class JesseRESTClient:
             if end_date:
                 payload["end_date"] = end_date
 
-            # This would be a candles import endpoint if Jesse API has one
-            # For now, return a message directing to Jesse API
+            if async_mode:
+                payload["async_mode"] = True
+
+            response = self.session.post(
+                f"{self.base_url}/candles/import",
+                json=payload,
+                timeout=300 if not async_mode else 30,
+            )
+            response.raise_for_status()
+            result = response.json()
+
+            if result.get("success", False) or result.get("status") == "started":
+                logger.info(f"✅ Candle import started for {exchange} {symbol}")
+            else:
+                logger.warning(
+                    f"⚠️ Candle import response: {result.get('message', 'unknown')}"
+                )
+
+            return result
+
+        except requests.exceptions.Timeout:
+            logger.error(f"❌ Candle import timeout for {exchange} {symbol}")
             return {
-                "message": "Use Jesse REST API /exchange endpoint for candle imports",
-                "endpoint": f"{self.base_url}/exchange",
+                "error": "Import request timed out - try async_mode=True",
                 "success": False,
             }
+        except Exception as e:
+            logger.error(f"❌ Candle import failed: {e}")
+            return {"error": str(e), "success": False}
+
+    def cancel_import(self, exchange: str, symbol: str) -> Dict[str, Any]:
+        """
+        Cancel a running candle import via Jesse REST API.
+
+        Args:
+            exchange: Exchange name
+            symbol: Trading symbol
+
+        Returns:
+            Dict with cancellation status
+        """
+        try:
+            logger.info(f"🚫 Cancelling import: {exchange} {symbol}")
+
+            payload = {
+                "exchange": exchange,
+                "symbol": symbol,
+            }
+
+            response = self.session.post(
+                f"{self.base_url}/candles/cancel-import",
+                json=payload,
+                timeout=10,
+            )
+            response.raise_for_status()
+            result = response.json()
+
+            if result.get("success", False) or result.get("cancelled", False):
+                logger.info(f"✅ Import cancelled for {exchange} {symbol}")
+            else:
+                logger.warning(f"⚠️ Cancel response: {result.get('message', 'unknown')}")
+
+            return result
 
         except Exception as e:
-            logger.error(f"❌ Candles import failed: {e}")
+            logger.error(f"❌ Failed to cancel import: {e}")
             return {"error": str(e), "success": False}
+
+    def get_existing_candles(
+        self,
+        exchange: Optional[str] = None,
+        symbol: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Get list of existing candles with date ranges via Jesse REST API.
+
+        Args:
+            exchange: Filter by exchange name (optional)
+            symbol: Filter by trading symbol (optional)
+
+        Returns:
+            Dict with list of available candle data and their date ranges
+        """
+        try:
+            logger.info("📊 Fetching existing candles info")
+
+            payload = {}
+            if exchange:
+                payload["exchange"] = exchange
+            if symbol:
+                payload["symbol"] = symbol
+
+            response = self.session.post(
+                f"{self.base_url}/candles/existing",
+                json=payload,
+                timeout=30,
+            )
+            response.raise_for_status()
+            result = response.json()
+
+            candles = result.get("candles", result.get("data", []))
+            count = len(candles) if isinstance(candles, list) else 0
+            logger.info(f"✅ Found {count} existing candle datasets")
+
+            return result
+
+        except Exception as e:
+            logger.error(f"❌ Failed to get existing candles: {e}")
+            return {"error": str(e), "candles": []}
+
+    def get_candles(
+        self,
+        exchange: str,
+        symbol: str,
+        timeframe: str,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Get candle data for a specific exchange/symbol/timeframe.
+
+        Args:
+            exchange: Exchange name
+            symbol: Trading symbol
+            timeframe: Candle timeframe (e.g., "1h", "4h", "1d")
+            start_date: Start date filter (optional)
+            end_date: End date filter (optional)
+
+        Returns:
+            Dict with candle data
+        """
+        try:
+            logger.info(f"📊 Fetching candles: {exchange} {symbol} {timeframe}")
+
+            payload = {
+                "exchange": exchange,
+                "symbol": symbol,
+                "timeframe": timeframe,
+            }
+
+            if start_date:
+                payload["start_date"] = start_date
+            if end_date:
+                payload["end_date"] = end_date
+
+            response = self.session.post(
+                f"{self.base_url}/candles/get",
+                json=payload,
+                timeout=60,
+            )
+            response.raise_for_status()
+            result = response.json()
+
+            candles = result.get("candles", result.get("data", []))
+            count = len(candles) if isinstance(candles, list) else 0
+            logger.info(f"✅ Retrieved {count} candles")
+
+            return result
+
+        except Exception as e:
+            logger.error(f"❌ Failed to get candles: {e}")
+            return {"error": str(e), "candles": []}
+
+    def delete_candles(
+        self,
+        exchange: str,
+        symbol: str,
+        timeframe: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Delete candle data for a specific exchange/symbol.
+
+        Args:
+            exchange: Exchange name
+            symbol: Trading symbol
+            timeframe: Specific timeframe to delete (optional, deletes all if omitted)
+
+        Returns:
+            Dict with deletion status
+        """
+        try:
+            logger.info(f"🗑️ Deleting candles: {exchange} {symbol}")
+
+            payload = {
+                "exchange": exchange,
+                "symbol": symbol,
+            }
+
+            if timeframe:
+                payload["timeframe"] = timeframe
+
+            response = self.session.post(
+                f"{self.base_url}/candles/delete",
+                json=payload,
+                timeout=30,
+            )
+            response.raise_for_status()
+            result = response.json()
+
+            if result.get("success", False):
+                logger.info(f"✅ Candles deleted for {exchange} {symbol}")
+            else:
+                logger.warning(f"⚠️ Delete response: {result.get('message', 'unknown')}")
+
+            return result
+
+        except Exception as e:
+            logger.error(f"❌ Failed to delete candles: {e}")
+            return {"error": str(e), "success": False}
+
+    def clear_candles_cache(self) -> Dict[str, Any]:
+        """
+        Clear the candles database cache via Jesse REST API.
+
+        Returns:
+            Dict with cache clear status
+        """
+        try:
+            logger.info("🧹 Clearing candles cache")
+
+            response = self.session.post(
+                f"{self.base_url}/candles/clear-cache",
+                json={},
+                timeout=30,
+            )
+            response.raise_for_status()
+            result = response.json()
+
+            if result.get("success", False):
+                logger.info("✅ Candles cache cleared")
+            else:
+                logger.warning(
+                    f"⚠️ Cache clear response: {result.get('message', 'unknown')}"
+                )
+
+            return result
+
+        except Exception as e:
+            logger.error(f"❌ Failed to clear candles cache: {e}")
+            return {"error": str(e), "success": False}
+
+    def get_supported_symbols(self, exchange: str) -> Dict[str, Any]:
+        """
+        Get list of supported symbols for an exchange.
+
+        Args:
+            exchange: Exchange name
+
+        Returns:
+            Dict with list of supported symbols
+        """
+        try:
+            logger.info(f"📋 Fetching supported symbols for {exchange}")
+
+            payload = {"exchange": exchange}
+
+            response = self.session.post(
+                f"{self.base_url}/exchange/supported-symbols",
+                json=payload,
+                timeout=30,
+            )
+            response.raise_for_status()
+            result = response.json()
+
+            symbols = result.get("symbols", result.get("data", []))
+            count = len(symbols) if isinstance(symbols, list) else 0
+            logger.info(f"✅ Found {count} symbols for {exchange}")
+
+            return result
+
+        except Exception as e:
+            logger.error(f"❌ Failed to get supported symbols: {e}")
+            return {"error": str(e), "symbols": []}
 
     def get_backtest_sessions(self) -> Dict[str, Any]:
         """Get list of backtest sessions"""

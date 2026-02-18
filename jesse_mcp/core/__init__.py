@@ -14,6 +14,16 @@ from jesse_mcp.core.mock import (
     MockJesseWrapper,
     get_mock_jesse_wrapper,
 )
+from jesse_mcp.core.websocket_stream import (
+    JesseWebSocketClient,
+    BacktestProgressTracker,
+    OptimizationProgressTracker,
+    MessageType,
+    SubscriptionType,
+    get_websocket_client,
+    close_websocket_client,
+    WEBSOCKETS_AVAILABLE,
+)
 
 __all__ = [
     "get_jesse_wrapper",
@@ -22,4 +32,12 @@ __all__ = [
     "JesseIntegrationError",
     "MockJesseWrapper",
     "get_mock_jesse_wrapper",
+    "JesseWebSocketClient",
+    "BacktestProgressTracker",
+    "OptimizationProgressTracker",
+    "MessageType",
+    "SubscriptionType",
+    "get_websocket_client",
+    "close_websocket_client",
+    "WEBSOCKETS_AVAILABLE",
 ]
