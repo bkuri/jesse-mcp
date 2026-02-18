@@ -417,4 +417,63 @@ def register_agent_tools(mcp: FastMCP) -> None:
             "risk_level": "high" if len(risks) >= 3 else "medium" if len(risks) >= 1 else "low",
         }
 
-    logger.info("✅ All 19 agent tools registered with MCP")
+    # ==================== LOG & ALERT TOOLS ====================
+
+    @mcp.tool
+    def logs_analyze_history(days: int = 30) -> dict:
+        """
+        Analyze recent backtest history from Jesse database.
+
+        Args:
+            days: Number of days to analyze (default: 30)
+
+        Returns:
+            Backtest history with metrics and trends
+        """
+        from jesse_mcp.logs import analyze_backtest_history
+
+        return analyze_backtest_history(days)
+
+    @mcp.tool
+    def logs_strategy_performance() -> dict:
+        """
+        Analyze strategy performance across all backtests.
+
+        Returns:
+            Performance metrics aggregated by strategy
+        """
+        from jesse_mcp.logs import analyze_strategy_performance
+
+        return analyze_strategy_performance()
+
+    @mcp.tool
+    def logs_weekly_report() -> str:
+        """
+        Generate weekly backtest activity report.
+
+        Returns:
+            Formatted weekly report with summaries and insights
+        """
+        from jesse_mcp.logs import generate_weekly_report
+
+        return generate_weekly_report()
+
+    @mcp.tool
+    def alerts_send_notification(message: str, priority: str = "default", tags: str = "") -> dict:
+        """
+        Send a notification alert via ntfy.sh.
+
+        Args:
+            message: Alert message to send
+            priority: Priority level (default, low, high, urgent)
+            tags: Comma-separated tags for the alert
+
+        Returns:
+            Send result with status and timestamp
+        """
+        from jesse_mcp.alerts import send_ntfy_alert
+
+        tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else []
+        return send_ntfy_alert(message, priority=priority, tags=tag_list)
+
+    logger.info("✅ All 23 agent tools registered with MCP")
