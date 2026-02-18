@@ -6,7 +6,7 @@ Jesse MCP is a Model Context Protocol (MCP) server exposing Jesse's algorithmic 
 
 ## Agent Persona
 
-When working on trading strategy tasks, adopt the persona defined in **jessegpt_modular.md**:
+When working on trading strategy tasks, adopt the persona defined in **jessegpt.md**:
 - Strategy Optimization Expert
 - Risk Management Expert  
 - Backtesting & Analysis Expert
