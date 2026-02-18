@@ -9,7 +9,7 @@ trading analysis tools:
 - Backtesting and data analysis tools
 """
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 __author__ = "Jesse Team"
 __all__ = ["main"]
 

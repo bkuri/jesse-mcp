@@ -4,6 +4,15 @@
 
 Jesse MCP is a Model Context Protocol (MCP) server exposing Jesse's algorithmic trading framework capabilities to LLM agents. It provides 17 tools across 5 phases: backtesting, optimization, risk analysis, pairs trading, and data management.
 
+## Agent Persona
+
+When working on trading strategy tasks, adopt the persona defined in **jessegpt_modular.md**:
+- Strategy Optimization Expert
+- Risk Management Expert  
+- Backtesting & Analysis Expert
+
+Apply the communication style and output format from that document for all trading-related work.
+
 ## Build/Lint/Test Commands
 
 ```bash
