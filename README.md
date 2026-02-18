@@ -1,23 +1,65 @@
 # Jesse MCP Server
 
+[![PyPI version](https://badge.fury.io/py/jesse-mcp.svg)](https://badge.fury.io/py/jesse-mcp)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 An MCP (Model Context Protocol) server that exposes Jesse's algorithmic trading framework capabilities to LLM agents.
 
 ## Status: Feature Complete ✅
 
 All planned features implemented and tested. 32 tools available (17 core + 15 agent).
 
-## Quick Start
+## Installation
+
+### PyPI
 
 ```bash
-# Install dependencies
-pip install -r requirements.txt
-
-# Run server (stdio transport)
-python -m jesse_mcp
-
-# Run server (HTTP transport for opencode integration)
-python -m jesse_mcp --transport http --port 8100
+pip install jesse-mcp
 ```
+
+### uvx (recommended for running directly)
+
+```bash
+uvx jesse-mcp
+```
+
+### Arch Linux (AUR)
+
+```bash
+yay -S jesse-mcp
+# or
+paru -S jesse-mcp
+```
+
+### From Source
+
+```bash
+git clone https://github.com/bkuri/jesse-mcp.git
+cd jesse-mcp
+pip install -e .
+```
+
+## Usage
+
+```bash
+# stdio transport (default, for MCP clients)
+jesse-mcp
+
+# HTTP transport (for remote access)
+jesse-mcp --transport http --port 8100
+
+# Show help
+jesse-mcp --help
+```
+
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `JESSE_URL` | Jesse REST API URL | `http://localhost:9000` |
+| `JESSE_PASSWORD` | Jesse UI password | (required) |
+| `JESSE_API_TOKEN` | Pre-generated API token | (alternative to password) |
 
 ## Features
 
@@ -103,14 +145,17 @@ Specialized tools for autonomous trading workflows:
 ## Testing
 
 ```bash
-# Run all tests
-JESSE_URL=http://localhost:9000 JESSE_PASSWORD=test pytest -v
+# Install dev dependencies
+pip install jesse-mcp[dev]
 
-# Run single test
-pytest tests/test_server.py::test_tools_list -v
+# Run all tests
+pytest -v
+
+# Run with coverage
+pytest --cov=jesse_mcp
 ```
 
-**Status:** 12/12 tests passing
+**Status:** 49 tests passing
 
 ## Local Development
 
@@ -224,4 +269,13 @@ jesse_mcp/
 
 ## License
 
-MIT
+MIT License - see [LICENSE](LICENSE) file for details.
+
+## Publishing
+
+This package uses GitHub Actions with PyPI trusted publishing. To release a new version:
+
+1. Update version in `pyproject.toml` and `jesse_mcp/__init__.py`
+2. Create a git tag: `git tag v1.x.x`
+3. Push tag: `git push origin v1.x.x`
+4. Create GitHub release - automatically publishes to PyPI
