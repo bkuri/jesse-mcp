@@ -5,6 +5,7 @@ Exposes agent methods as MCP tools for direct LLM access via the MCP protocol.
 No need for Python function calls - everything goes through MCP.
 """
 
+import json
 import logging
 from typing import Optional, List
 from fastmcp import FastMCP
@@ -324,4 +325,96 @@ def register_agent_tools(mcp: FastMCP) -> None:
         agent = get_backtest_agent()
         return agent.validate_statistical_significance(strategy_name, pair)
 
-    logger.info("✅ All 15 agent tools registered with MCP")
+    # ==================== MARKET MONITORING TOOLS ====================
+
+    @mcp.tool
+    def monitor_daily_scan(symbols: str = "BTC-USDT,ETH-USDT") -> dict:
+        """
+        Run daily market scan to identify trading opportunities.
+
+        Scans multiple symbols and strategies to find signals.
+
+        Args:
+            symbols: Comma-separated list of symbols to scan
+
+        Returns:
+            Daily report with opportunities, risks, and recommendations
+        """
+        from jesse_mcp.monitoring import MarketMonitor
+
+        symbol_list = [s.strip() for s in symbols.split(",")]
+        monitor = MarketMonitor(symbols=symbol_list)
+        report = monitor.daily_scan()
+        return json.loads(monitor.report_to_json(report))
+
+    @mcp.tool
+    def monitor_get_sentiment() -> dict:
+        """
+        Get current market sentiment from Fear & Greed Index.
+
+        Returns:
+            Fear & Greed score and rating with historical context
+        """
+        from jesse_mcp.monitoring import MarketMonitor
+
+        monitor = MarketMonitor()
+        fg = monitor.get_fear_greed()
+        sentiment = monitor.analyze_sentiment(fg.get("score", 50))
+        return {
+            "fear_greed": fg,
+            "sentiment": sentiment,
+            "timestamp": fg.get("timestamp", ""),
+        }
+
+    @mcp.tool
+    def monitor_scan_opportunities(
+        symbols: str = "BTC-USDT,ETH-USDT",
+        strategies: str = "SMACrossover,SwingTrader,PositionTrader",
+    ) -> dict:
+        """
+        Scan for trading opportunities across symbols and strategies.
+
+        Args:
+            symbols: Comma-separated list of symbols
+            strategies: Comma-separated list of strategies
+
+        Returns:
+            List of trading opportunities with signals and confidence
+        """
+        from jesse_mcp.monitoring import MarketMonitor
+
+        symbol_list = [s.strip() for s in symbols.split(",")]
+        strategy_list = [s.strip() for s in strategies.split(",")]
+
+        monitor = MarketMonitor(symbols=symbol_list, strategies=strategy_list)
+        opportunities = monitor.scan_opportunities()
+
+        return {
+            "opportunities": opportunities,
+            "count": len(opportunities),
+            "timestamp": __import__("datetime")
+            .datetime.now(__import__("datetime").timezone.utc)
+            .isoformat(),
+        }
+
+    @mcp.tool
+    def monitor_get_risks() -> dict:
+        """
+        Identify current market risks and warning signs.
+
+        Returns:
+            List of identified risks with severity levels
+        """
+        from jesse_mcp.monitoring import MarketMonitor
+
+        monitor = MarketMonitor()
+        risks = monitor.identify_risks()
+        fg = monitor.get_fear_greed()
+
+        return {
+            "risks": risks,
+            "fear_greed_score": fg.get("score", 50),
+            "risk_level": "high" if len(risks) >= 3 else "medium" if len(risks) >= 1 else "low",
+        }
+
+    logger.info("✅ All 19 agent tools registered with MCP")
