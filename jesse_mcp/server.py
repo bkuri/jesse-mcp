@@ -43,13 +43,13 @@ def _initialize_dependencies():
     try:
         from jesse_mcp.core.integrations import get_jesse_wrapper, JESSE_AVAILABLE
 
-        if not JESSE_AVAILABLE:
-            raise ImportError("Jesse framework not available")
-        jesse = get_jesse_wrapper()
-        logger.info("✅ Jesse framework initialized")
+        if JESSE_AVAILABLE:
+            jesse = get_jesse_wrapper()
+            logger.info("✅ Jesse framework initialized")
+        else:
+            logger.warning("⚠️ Jesse framework not available - running in mock mode")
     except Exception as e:
-        logger.critical(f"❌ Jesse initialization failed: {e}")
-        raise SystemExit(1)
+        logger.warning(f"⚠️ Jesse initialization failed: {e} - running in mock mode")
 
     try:
         from jesse_mcp.optimizer import get_optimizer
@@ -57,8 +57,7 @@ def _initialize_dependencies():
         optimizer = get_optimizer()
         logger.info("✅ Optimizer module loaded")
     except Exception as e:
-        logger.critical(f"❌ Optimizer initialization failed: {e}")
-        raise SystemExit(1)
+        logger.warning(f"⚠️ Optimizer initialization failed: {e}")
 
     try:
         from jesse_mcp.risk_analyzer import get_risk_analyzer
@@ -66,8 +65,7 @@ def _initialize_dependencies():
         risk_analyzer = get_risk_analyzer()
         logger.info("✅ Risk analyzer module loaded")
     except Exception as e:
-        logger.critical(f"❌ Risk analyzer initialization failed: {e}")
-        raise SystemExit(1)
+        logger.warning(f"⚠️ Risk analyzer initialization failed: {e}")
 
     try:
         from jesse_mcp.pairs_analyzer import get_pairs_analyzer
@@ -75,8 +73,7 @@ def _initialize_dependencies():
         pairs_analyzer = get_pairs_analyzer()
         logger.info("✅ Pairs analyzer module loaded")
     except Exception as e:
-        logger.critical(f"❌ Pairs analyzer initialization failed: {e}")
-        raise SystemExit(1)
+        logger.warning(f"⚠️ Pairs analyzer initialization failed: {e}")
 
     _initialized = True
 
@@ -701,9 +698,7 @@ def main():
     except Exception as e:
         logger.warning(f"⚠️  Agent tools registration failed: {e}")
 
-    parser = argparse.ArgumentParser(
-        description="Jesse MCP Server - Quantitative Trading Analysis"
-    )
+    parser = argparse.ArgumentParser(description="Jesse MCP Server - Quantitative Trading Analysis")
     parser.add_argument(
         "--transport",
         choices=["stdio", "http"],
