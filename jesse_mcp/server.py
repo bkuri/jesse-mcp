@@ -679,6 +679,316 @@ def cache_clear(cache_name: Optional[str] = None) -> dict:
         return {"error": str(e), "error_type": type(e).__name__}
 
 
+# ==================== LIVE TRADING TOOLS (Phase 6) ====================
+
+
+@mcp.tool
+def live_check_plugin() -> dict:
+    """
+    Check if jesse-live plugin is installed and available.
+
+    Returns:
+        Dict with 'available' boolean and optional 'error' message
+    """
+    try:
+        from jesse_mcp.core.jesse_rest_client import get_jesse_rest_client
+
+        client = get_jesse_rest_client()
+        return client.check_live_plugin_available()
+    except Exception as e:
+        logger.error(f"Live plugin check failed: {e}")
+        return {"available": False, "error": str(e)}
+
+
+@mcp.tool
+def live_start_paper_trading(
+    strategy: str,
+    symbol: str,
+    timeframe: str,
+    exchange: str,
+    exchange_api_key_id: str,
+    notification_api_key_id: str = "",
+    debug_mode: bool = False,
+) -> dict:
+    """
+    Start a PAPER trading session (simulated, no real money).
+
+    Paper trading simulates trades without using real funds.
+    Use this to test strategies before going live.
+
+    Args:
+        strategy: Strategy name (must exist in strategies directory)
+        symbol: Trading symbol (e.g., "BTC-USDT")
+        timeframe: Candle timeframe (e.g., "1h", "4h", "1d")
+        exchange: Exchange name (e.g., "Binance", "Bybit")
+        exchange_api_key_id: ID of stored exchange API key in Jesse
+        notification_api_key_id: ID of stored notification config (optional)
+        debug_mode: Enable debug logging
+
+    Returns:
+        Dict with session_id and status, or error details
+    """
+    try:
+        from jesse_mcp.core.live_config import PAPER_TRADING_INFO
+        from jesse_mcp.core.jesse_rest_client import get_jesse_rest_client
+
+        logger.info(PAPER_TRADING_INFO)
+
+        client = get_jesse_rest_client()
+        result = client.start_live_session(
+            strategy=strategy,
+            symbol=symbol,
+            timeframe=timeframe,
+            exchange=exchange,
+            exchange_api_key_id=exchange_api_key_id,
+            notification_api_key_id=notification_api_key_id,
+            paper_mode=True,
+            debug_mode=debug_mode,
+        )
+        result["mode"] = "paper"
+        return result
+    except Exception as e:
+        logger.error(f"Paper trading start failed: {e}")
+        return {"error": str(e), "error_type": type(e).__name__}
+
+
+@mcp.tool
+def live_start_live_trading(
+    strategy: str,
+    symbol: str,
+    timeframe: str,
+    exchange: str,
+    exchange_api_key_id: str,
+    confirmation: str,
+    notification_api_key_id: str = "",
+    debug_mode: bool = False,
+    permission: str = "confirm_required",
+) -> dict:
+    """
+    Start LIVE trading with REAL MONEY.
+
+    ⚠️  WARNING: This will execute real trades with real funds. ⚠️
+
+    RISKS:
+    - Your funds are at risk of total loss
+    - Automated trading can result in significant losses
+    - No guarantee of profit
+
+    REQUIREMENTS:
+    1. Thoroughly backtested strategy
+    2. Successful paper trading first
+    3. Understanding of strategy's risk profile
+    4. Capital you can afford to lose
+
+    Args:
+        strategy: Strategy name (must exist in strategies directory)
+        symbol: Trading symbol (e.g., "BTC-USDT")
+        timeframe: Candle timeframe (e.g., "1h", "4h", "1d")
+        exchange: Exchange name (e.g., "Binance", "Bybit")
+        exchange_api_key_id: ID of stored exchange API key in Jesse
+        confirmation: REQUIRED: Must be exactly "I UNDERSTAND THE RISKS"
+        notification_api_key_id: ID of stored notification config (optional)
+        debug_mode: Enable debug logging
+        permission: Agent permission level ("paper_only", "confirm_required", "full_autonomous")
+
+    Returns:
+        Dict with session_id and status, or error details
+    """
+    try:
+        from jesse_mcp.core.live_config import (
+            LiveTradingConfig,
+            AgentPermission,
+            LIVE_TRADING_WARNING,
+            LiveSessionRequest,
+        )
+        from jesse_mcp.core.jesse_rest_client import get_jesse_rest_client
+
+        config = LiveTradingConfig.from_env()
+
+        if confirmation != config.confirmation_phrase:
+            return {
+                "error": f"Invalid confirmation. Required: '{config.confirmation_phrase}'",
+                "warning": LIVE_TRADING_WARNING,
+            }
+
+        try:
+            perm = AgentPermission(permission)
+        except ValueError:
+            perm = AgentPermission.CONFIRM_REQUIRED
+
+        request = LiveSessionRequest(
+            strategy=strategy,
+            symbol=symbol,
+            timeframe=timeframe,
+            exchange=exchange,
+            exchange_api_key_id=exchange_api_key_id,
+            notification_api_key_id=notification_api_key_id,
+            paper_mode=False,
+            debug_mode=debug_mode,
+            permission=perm,
+            confirmation=confirmation,
+        )
+
+        validation = request.validate_for_live_mode(config)
+        if not validation.get("valid"):
+            return {"error": validation.get("error"), "warning": LIVE_TRADING_WARNING}
+
+        logger.warning(LIVE_TRADING_WARNING)
+
+        client = get_jesse_rest_client()
+        result = client.start_live_session(
+            strategy=strategy,
+            symbol=symbol,
+            timeframe=timeframe,
+            exchange=exchange,
+            exchange_api_key_id=exchange_api_key_id,
+            notification_api_key_id=notification_api_key_id,
+            paper_mode=False,
+            debug_mode=debug_mode,
+        )
+        result["mode"] = "live"
+        result["warning"] = "REAL MONEY TRADING - Monitor closely!"
+        return result
+    except Exception as e:
+        logger.error(f"Live trading start failed: {e}")
+        return {"error": str(e), "error_type": type(e).__name__}
+
+
+@mcp.tool
+def live_cancel_session(session_id: str, paper_mode: bool = True) -> dict:
+    """
+    Cancel a running live/paper trading session.
+
+    Args:
+        session_id: Session ID to cancel
+        paper_mode: True if paper trading session, False if live
+
+    Returns:
+        Dict with cancellation status
+    """
+    try:
+        from jesse_mcp.core.jesse_rest_client import get_jesse_rest_client
+
+        client = get_jesse_rest_client()
+        return client.cancel_live_session(session_id, paper_mode)
+    except Exception as e:
+        logger.error(f"Session cancel failed: {e}")
+        return {"error": str(e), "error_type": type(e).__name__}
+
+
+@mcp.tool
+def live_get_sessions(limit: int = 50, offset: int = 0) -> dict:
+    """
+    Get list of live trading sessions.
+
+    Args:
+        limit: Maximum number of sessions to return (default: 50)
+        offset: Offset for pagination (default: 0)
+
+    Returns:
+        Dict with sessions list
+    """
+    try:
+        from jesse_mcp.core.jesse_rest_client import get_jesse_rest_client
+
+        client = get_jesse_rest_client()
+        return client.get_live_sessions(limit, offset)
+    except Exception as e:
+        logger.error(f"Get sessions failed: {e}")
+        return {"error": str(e), "sessions": []}
+
+
+@mcp.tool
+def live_get_status(session_id: str) -> dict:
+    """
+    Get status of a specific live trading session.
+
+    Args:
+        session_id: Session ID to check
+
+    Returns:
+        Dict with session details and current status
+    """
+    try:
+        from jesse_mcp.core.jesse_rest_client import get_jesse_rest_client
+
+        client = get_jesse_rest_client()
+        return client.get_live_session(session_id)
+    except Exception as e:
+        logger.error(f"Get session status failed: {e}")
+        return {"error": str(e), "session": None}
+
+
+@mcp.tool
+def live_get_orders(session_id: str) -> dict:
+    """
+    Get orders from a live trading session.
+
+    Args:
+        session_id: Session ID
+
+    Returns:
+        Dict with orders list
+    """
+    try:
+        from jesse_mcp.core.jesse_rest_client import get_jesse_rest_client
+
+        client = get_jesse_rest_client()
+        return client.get_live_orders(session_id)
+    except Exception as e:
+        logger.error(f"Get orders failed: {e}")
+        return {"error": str(e), "orders": []}
+
+
+@mcp.tool
+def live_get_equity_curve(
+    session_id: str,
+    from_ms: Optional[int] = None,
+    to_ms: Optional[int] = None,
+) -> dict:
+    """
+    Get real-time equity curve (P&L) for a session.
+
+    Args:
+        session_id: Session ID
+        from_ms: Start time in milliseconds (optional)
+        to_ms: End time in milliseconds (optional)
+
+    Returns:
+        Dict with equity curve data points
+    """
+    try:
+        from jesse_mcp.core.jesse_rest_client import get_jesse_rest_client
+
+        client = get_jesse_rest_client()
+        return client.get_live_equity_curve(session_id, from_ms, to_ms)
+    except Exception as e:
+        logger.error(f"Get equity curve failed: {e}")
+        return {"error": str(e), "data": []}
+
+
+@mcp.tool
+def live_get_logs(session_id: str, log_type: str = "all") -> dict:
+    """
+    Get logs from a live trading session.
+
+    Args:
+        session_id: Session ID
+        log_type: Log type filter ("all", "info", "error", "warning")
+
+    Returns:
+        Dict with log entries
+    """
+    try:
+        from jesse_mcp.core.jesse_rest_client import get_jesse_rest_client
+
+        client = get_jesse_rest_client()
+        return client.get_live_logs(session_id, log_type)
+    except Exception as e:
+        logger.error(f"Get logs failed: {e}")
+        return {"error": str(e), "data": []}
+
+
 # ==================== MAIN ENTRY POINT ====================
 
 

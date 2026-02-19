@@ -194,9 +194,7 @@ class JesseRESTClient:
             # Login with password to get a session token
             self._authenticate_with_password(password)
         else:
-            logger.warning(
-                "⚠️ No JESSE_PASSWORD or JESSE_API_TOKEN provided - requests will fail"
-            )
+            logger.warning("⚠️ No JESSE_PASSWORD or JESSE_API_TOKEN provided - requests will fail")
 
         self._verify_connection()
 
@@ -277,9 +275,7 @@ class JesseRESTClient:
 
         if result["connected"]:
             try:
-                strategies_response = self.session.get(
-                    f"{self.base_url}/strategies", timeout=5
-                )
+                strategies_response = self.session.get(f"{self.base_url}/strategies", timeout=5)
                 if strategies_response.status_code == 200:
                     strategies_data = strategies_response.json()
                     if isinstance(strategies_data, list):
@@ -763,9 +759,7 @@ class JesseRESTClient:
             if result.get("success", False) or result.get("status") == "started":
                 logger.info(f"✅ Candle import started for {exchange} {symbol}")
             else:
-                logger.warning(
-                    f"⚠️ Candle import response: {result.get('message', 'unknown')}"
-                )
+                logger.warning(f"⚠️ Candle import response: {result.get('message', 'unknown')}")
 
             return result
 
@@ -980,9 +974,7 @@ class JesseRESTClient:
             if result.get("success", False):
                 logger.info("✅ Candles cache cleared")
             else:
-                logger.warning(
-                    f"⚠️ Cache clear response: {result.get('message', 'unknown')}"
-                )
+                logger.warning(f"⚠️ Cache clear response: {result.get('message', 'unknown')}")
 
             return result
 
@@ -1136,9 +1128,7 @@ class JesseRESTClient:
         """Get list of backtest sessions"""
         try:
             payload = {"limit": 50, "offset": 0}
-            response = self.session.post(
-                f"{self.base_url}/backtest/sessions", json=payload
-            )
+            response = self.session.post(f"{self.base_url}/backtest/sessions", json=payload)
             response.raise_for_status()
             return response.json()
         except Exception as e:
@@ -1149,14 +1139,413 @@ class JesseRESTClient:
         """Get list of optimization sessions"""
         try:
             payload = {"limit": 50, "offset": 0}
-            response = self.session.post(
-                f"{self.base_url}/optimization/sessions", json=payload
-            )
+            response = self.session.post(f"{self.base_url}/optimization/sessions", json=payload)
             response.raise_for_status()
             return response.json()
         except Exception as e:
             logger.error(f"❌ Failed to get optimization sessions: {e}")
             return {"error": str(e), "sessions": []}
+
+    def check_live_plugin_available(self) -> Dict[str, Any]:
+        """
+        Check if jesse-live plugin is installed and available.
+
+        Returns:
+            Dict with 'available' boolean and optional 'error' message
+        """
+        try:
+            response = self.session.get(f"{self.base_url}/live/sessions", timeout=10)
+            if response.status_code == 200:
+                logger.info("✅ jesse-live plugin is available")
+                return {"available": True}
+            elif response.status_code == 404:
+                logger.warning("⚠️ jesse-live plugin not installed")
+                return {"available": False, "error": "jesse-live plugin not installed"}
+            else:
+                return {"available": False, "error": f"Unexpected status: {response.status_code}"}
+        except Exception as e:
+            logger.error(f"❌ Failed to check live plugin: {e}")
+            return {"available": False, "error": str(e)}
+
+    def start_live_session(
+        self,
+        strategy: str,
+        symbol: str,
+        timeframe: str,
+        exchange: str,
+        exchange_api_key_id: str,
+        notification_api_key_id: str = "",
+        paper_mode: bool = True,
+        debug_mode: bool = False,
+        config: Optional[Dict[str, Any]] = None,
+        routes: Optional[List[Dict[str, str]]] = None,
+        data_routes: Optional[List[Dict[str, str]]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Start a live or paper trading session via Jesse REST API.
+
+        Args:
+            strategy: Strategy name
+            symbol: Trading symbol (e.g., "BTC-USDT")
+            timeframe: Candle timeframe (e.g., "1h", "4h")
+            exchange: Exchange name (e.g., "Binance")
+            exchange_api_key_id: ID of stored exchange API key
+            notification_api_key_id: ID of stored notification config (optional)
+            paper_mode: True for paper trading (simulated), False for live (real money)
+            debug_mode: Enable debug logging
+            config: Additional configuration dict
+            routes: Custom routes (default: single route for strategy)
+            data_routes: Custom data routes (default: single route for data)
+
+        Returns:
+            Dict with session info or error
+        """
+        try:
+            import uuid
+
+            mode = "paper" if paper_mode else "LIVE"
+            logger.info(f"🚀 Starting {mode} trading session: {strategy} on {symbol}")
+
+            if routes is None:
+                routes = [
+                    {
+                        "exchange": exchange,
+                        "strategy": strategy,
+                        "symbol": symbol,
+                        "timeframe": timeframe,
+                    }
+                ]
+
+            if data_routes is None:
+                data_routes = [
+                    {
+                        "exchange": exchange,
+                        "symbol": symbol,
+                        "timeframe": timeframe,
+                    }
+                ]
+
+            default_config = {
+                "warm_up_candles": 240,
+                "logging": {"output_type": "json"},
+            }
+            if config:
+                default_config.update(config)
+
+            payload = {
+                "id": str(uuid.uuid4()),
+                "exchange": exchange,
+                "exchange_api_key_id": exchange_api_key_id,
+                "notification_api_key_id": notification_api_key_id,
+                "routes": routes,
+                "data_routes": data_routes,
+                "config": default_config,
+                "debug_mode": debug_mode,
+                "paper_mode": paper_mode,
+            }
+
+            response = self.session.post(
+                f"{self.base_url}/live",
+                json=payload,
+                timeout=30,
+            )
+            response.raise_for_status()
+            result = response.json()
+            result["session_id"] = payload["id"]
+            result["paper_mode"] = paper_mode
+
+            logger.info(f"✅ {mode.upper()} trading session started: {payload['id']}")
+            return result
+
+        except Exception as e:
+            logger.error(f"❌ Failed to start live session: {e}")
+            return {"error": str(e), "success": False}
+
+    def cancel_live_session(self, session_id: str, paper_mode: bool = True) -> Dict[str, Any]:
+        """
+        Cancel a running live trading session.
+
+        Args:
+            session_id: Session ID to cancel
+            paper_mode: True if paper trading, False if live trading
+
+        Returns:
+            Dict with cancellation status
+        """
+        try:
+            mode = "paper" if paper_mode else "LIVE"
+            logger.info(f"🛑 Cancelling {mode} session: {session_id}")
+
+            payload = {
+                "id": session_id,
+                "paper_mode": paper_mode,
+            }
+
+            response = self.session.post(
+                f"{self.base_url}/live/cancel",
+                json=payload,
+                timeout=30,
+            )
+            response.raise_for_status()
+            result = response.json()
+
+            logger.info(f"✅ Session cancelled: {session_id}")
+            return result
+
+        except Exception as e:
+            logger.error(f"❌ Failed to cancel session: {e}")
+            return {"error": str(e), "success": False}
+
+    def get_live_sessions(self, limit: int = 50, offset: int = 0) -> Dict[str, Any]:
+        """
+        Get list of live trading sessions.
+
+        Args:
+            limit: Maximum number of sessions to return
+            offset: Offset for pagination
+
+        Returns:
+            Dict with sessions list
+        """
+        try:
+            logger.info("📋 Fetching live sessions")
+
+            payload = {"limit": limit, "offset": offset}
+
+            response = self.session.post(
+                f"{self.base_url}/live/sessions",
+                json=payload,
+                timeout=30,
+            )
+            response.raise_for_status()
+            result = response.json()
+
+            sessions = result.get("sessions", result.get("data", []))
+            count = len(sessions) if isinstance(sessions, list) else 0
+            logger.info(f"✅ Found {count} live sessions")
+            return result
+
+        except Exception as e:
+            logger.error(f"❌ Failed to get live sessions: {e}")
+            return {"error": str(e), "sessions": []}
+
+    def get_live_session(self, session_id: str) -> Dict[str, Any]:
+        """
+        Get a specific live session by ID.
+
+        Args:
+            session_id: Session ID to retrieve
+
+        Returns:
+            Dict with session details
+        """
+        try:
+            logger.info(f"📊 Fetching live session: {session_id}")
+
+            payload = {"id": session_id}
+
+            response = self.session.post(
+                f"{self.base_url}/live/sessions/{session_id}",
+                json=payload,
+                timeout=30,
+            )
+            response.raise_for_status()
+            result = response.json()
+
+            logger.info(f"✅ Retrieved session: {session_id}")
+            return result
+
+        except Exception as e:
+            logger.error(f"❌ Failed to get live session: {e}")
+            return {"error": str(e), "session": None}
+
+    def get_live_logs(
+        self,
+        session_id: str,
+        log_type: str = "all",
+        start_time: int = 0,
+    ) -> Dict[str, Any]:
+        """
+        Get logs for a live trading session.
+
+        Args:
+            session_id: Session ID
+            log_type: Log type filter ("all", "info", "error", "warning")
+            start_time: Unix timestamp to filter logs from
+
+        Returns:
+            Dict with logs data
+        """
+        try:
+            logger.info(f"📜 Fetching logs for session: {session_id}")
+
+            payload = {
+                "id": session_id,
+                "type": log_type,
+                "start_time": start_time,
+            }
+
+            response = self.session.post(
+                f"{self.base_url}/live/logs",
+                json=payload,
+                timeout=30,
+            )
+            response.raise_for_status()
+            result = response.json()
+
+            logs = result.get("data", [])
+            count = len(logs) if isinstance(logs, list) else 0
+            logger.info(f"✅ Retrieved {count} log entries")
+            return result
+
+        except Exception as e:
+            logger.error(f"❌ Failed to get live logs: {e}")
+            return {"error": str(e), "data": []}
+
+    def get_live_orders(self, session_id: str) -> Dict[str, Any]:
+        """
+        Get orders for a live trading session.
+
+        Args:
+            session_id: Session ID
+
+        Returns:
+            Dict with orders data
+        """
+        try:
+            logger.info(f"📦 Fetching orders for session: {session_id}")
+
+            payload = {"id": session_id}
+
+            response = self.session.post(
+                f"{self.base_url}/live/orders",
+                json=payload,
+                timeout=30,
+            )
+            response.raise_for_status()
+            result = response.json()
+
+            orders = result.get("orders", result.get("data", []))
+            count = len(orders) if isinstance(orders, list) else 0
+            logger.info(f"✅ Retrieved {count} orders")
+            return result
+
+        except Exception as e:
+            logger.error(f"❌ Failed to get live orders: {e}")
+            return {"error": str(e), "orders": []}
+
+    def get_live_equity_curve(
+        self,
+        session_id: str,
+        from_ms: Optional[int] = None,
+        to_ms: Optional[int] = None,
+        timeframe: str = "auto",
+        max_points: int = 1000,
+    ) -> Dict[str, Any]:
+        """
+        Get equity curve for a live trading session.
+
+        Args:
+            session_id: Session ID
+            from_ms: Start time in milliseconds (optional)
+            to_ms: End time in milliseconds (optional)
+            timeframe: Timeframe for downsampling ("auto" or specific)
+            max_points: Maximum number of data points
+
+        Returns:
+            Dict with equity curve data
+        """
+        try:
+            logger.info(f"📈 Fetching equity curve for session: {session_id}")
+
+            params = {
+                "session_id": session_id,
+                "timeframe": timeframe,
+                "max_points": max_points,
+            }
+            if from_ms is not None:
+                params["from_ms"] = from_ms
+            if to_ms is not None:
+                params["to_ms"] = to_ms
+
+            response = self.session.get(
+                f"{self.base_url}/live/equity-curve",
+                params=params,
+                timeout=30,
+            )
+            response.raise_for_status()
+            result = response.json()
+
+            logger.info(f"✅ Retrieved equity curve")
+            return result
+
+        except Exception as e:
+            logger.error(f"❌ Failed to get equity curve: {e}")
+            return {"error": str(e), "data": []}
+
+    def update_live_session_notes(self, session_id: str, notes: str) -> Dict[str, Any]:
+        """
+        Update notes for a live trading session.
+
+        Args:
+            session_id: Session ID
+            notes: Notes text
+
+        Returns:
+            Dict with update status
+        """
+        try:
+            logger.info(f"📝 Updating notes for session: {session_id}")
+
+            payload = {"id": session_id, "notes": notes}
+
+            response = self.session.post(
+                f"{self.base_url}/live/sessions/{session_id}/notes",
+                json=payload,
+                timeout=30,
+            )
+            response.raise_for_status()
+            result = response.json()
+
+            logger.info(f"✅ Updated session notes")
+            return result
+
+        except Exception as e:
+            logger.error(f"❌ Failed to update session notes: {e}")
+            return {"error": str(e), "success": False}
+
+    def purge_live_sessions(self, days_old: Optional[int] = None) -> Dict[str, Any]:
+        """
+        Purge old live trading sessions from database.
+
+        Args:
+            days_old: Delete sessions older than this many days (optional)
+
+        Returns:
+            Dict with deletion count
+        """
+        try:
+            logger.info(f"🧹 Purging old live sessions")
+
+            payload = {}
+            if days_old is not None:
+                payload["days_old"] = days_old
+
+            response = self.session.post(
+                f"{self.base_url}/live/purge-sessions",
+                json=payload,
+                timeout=30,
+            )
+            response.raise_for_status()
+            result = response.json()
+
+            deleted = result.get("deleted_count", 0)
+            logger.info(f"✅ Purged {deleted} sessions")
+            return result
+
+        except Exception as e:
+            logger.error(f"❌ Failed to purge sessions: {e}")
+            return {"error": str(e), "deleted_count": 0}
 
 
 # Global instance

@@ -452,6 +452,110 @@ This includes:
 
 Requires Python >= 3.10 (uses modern type hint syntax)
 
+## Live Trading (Phase 6)
+
+Jesse MCP now supports live trading via the `jesse-live` plugin. This enables autonomous trading with safety mechanisms.
+
+### Prerequisites
+
+1. **jesse-live plugin** - Must be installed in Jesse container:
+   ```bash
+   # In Jesse container
+   jesse install-live --no-strict
+   ```
+
+2. **Exchange API Keys** - Must be configured in Jesse UI before use
+
+3. **LICENSE_API_TOKEN** - Required in Jesse .env file
+
+### MCP Tools
+
+| Tool | Purpose | Mode |
+|------|---------|------|
+| `live_check_plugin` | Check if jesse-live is available | Safe |
+| `live_start_paper_trading` | Start simulated trading | Safe |
+| `live_start_live_trading` | Start real money trading | ⚠️ Risky |
+| `live_cancel_session` | Stop running session | Safe |
+| `live_get_sessions` | List trading sessions | Safe |
+| `live_get_status` | Get session status | Safe |
+| `live_get_orders` | Get session orders | Safe |
+| `live_get_equity_curve` | Get P&L data | Safe |
+| `live_get_logs` | Get session logs | Safe |
+
+### Safety Mechanisms
+
+1. **Confirmation Required** - Live trading requires confirmation phrase: `"I UNDERSTAND THE RISKS"`
+2. **Agent Permission Levels**:
+   - `paper_only` - Can only start paper trading
+   - `confirm_required` - Can start live with confirmation
+   - `full_autonomous` - Can trade live without confirmation
+3. **Risk Limits** (configurable):
+   - Max position size: 10% of portfolio
+   - Max daily loss: 5%
+   - Max drawdown: 15%
+4. **Auto-Stop** - Sessions stop automatically on max loss
+
+### Example Usage
+
+```python
+# Paper trading (safe)
+result = await client.call_tool("live_start_paper_trading", {
+    "strategy": "SMACrossover",
+    "symbol": "BTC-USDT",
+    "timeframe": "1h",
+    "exchange": "Binance",
+    "exchange_api_key_id": "your-key-id"
+})
+
+# Live trading (requires confirmation)
+result = await client.call_tool("live_start_live_trading", {
+    "strategy": "SMACrossover",
+    "symbol": "BTC-USDT",
+    "timeframe": "1h",
+    "exchange": "Binance",
+    "exchange_api_key_id": "your-key-id",
+    "confirmation": "I UNDERSTAND THE RISKS",
+    "permission": "confirm_required"
+})
+```
+
+### TradingAgent Class
+
+For programmatic autonomous trading:
+
+```python
+from jesse_mcp.agents.live_trader import TradingAgent, get_trading_agent
+from jesse_mcp.core.live_config import AgentPermission
+
+# Create agent with paper-only permission
+agent = get_trading_agent("paper_only")
+
+# Execute full workflow: backtest → paper trade
+result = await agent.execute_strategy_workflow(
+    strategy="SMACrossover",
+    symbol="BTC-USDT",
+    timeframe="1h",
+    start_date="2023-01-01",
+    end_date="2024-01-01",
+    exchange_api_key_id="your-key-id",
+)
+
+# Monitor session
+async for update in agent.monitor_session(session_id, interval_seconds=60):
+    print(f"Status: {update['status']}, Alerts: {update.get('alerts', [])}")
+```
+
+### Environment Variables
+
+```bash
+JESSE_DEFAULT_PERMISSION=paper_only    # Default agent permission
+JESSE_MAX_POSITION_SIZE=0.1            # Max 10% position
+JESSE_MAX_DAILY_LOSS=0.05              # Max 5% daily loss
+JESSE_MAX_DRAWDOWN=0.15                # Max 15% drawdown
+JESSE_REQUIRE_CONFIRMATION=true        # Require confirmation phrase
+JESSE_AUTO_STOP_ON_LOSS=true           # Auto-stop on max loss
+```
+
 ## Landing the Plane (Session Completion)
 
 **When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.
