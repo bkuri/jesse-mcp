@@ -1434,6 +1434,46 @@ class JesseRESTClient:
             logger.error(f"❌ Failed to get live orders: {e}")
             return {"error": str(e), "orders": []}
 
+    def get_closed_trades(
+        self,
+        session_id: str,
+        limit: int = 100,
+    ) -> Dict[str, Any]:
+        """
+        Get closed/completed trades for a live trading session.
+
+        Args:
+            session_id: Session ID
+            limit: Maximum number of trades to return (default: 100, max: 1000)
+
+        Returns:
+            Dict with trades list
+        """
+        try:
+            logger.info(f"📊 Fetching closed trades for session: {session_id}")
+
+            params = {
+                "session_id": session_id,
+                "limit": min(limit, 1000),
+            }
+
+            response = self.session.get(
+                f"{self.base_url}/closed-trades/list",
+                params=params,
+                timeout=30,
+            )
+            response.raise_for_status()
+            result = response.json()
+
+            trades = result.get("data", [])
+            count = len(trades) if isinstance(trades, list) else 0
+            logger.info(f"✅ Retrieved {count} closed trades")
+            return result
+
+        except Exception as e:
+            logger.error(f"❌ Failed to get closed trades: {e}")
+            return {"error": str(e), "data": []}
+
     def get_live_equity_curve(
         self,
         session_id: str,

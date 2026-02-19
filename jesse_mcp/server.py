@@ -989,6 +989,274 @@ def live_get_logs(session_id: str, log_type: str = "all") -> dict:
         return {"error": str(e), "data": []}
 
 
+# ==================== PAPER TRADING TOOLS (PRD-PAPER.md) ====================
+
+
+@mcp.tool
+def paper_start(
+    strategy: str,
+    symbol: str,
+    timeframe: str = "1h",
+    exchange: str = "Binance",
+    exchange_api_key_id: str = "",
+    starting_balance: float = 10000,
+    leverage: float = 1,
+    fee: float = 0.001,
+    session_id: Optional[str] = None,
+) -> dict:
+    """
+    Start a paper trading session.
+
+    Paper trading simulates trades without using real funds.
+    Use this to test strategies before going live.
+
+    Args:
+        strategy: Strategy name (e.g., 'SMACrossover', 'DayTrader')
+        symbol: Trading pair (e.g., 'BTC-USDT')
+        timeframe: Candle timeframe (default: '1h')
+        exchange: Exchange name (default: 'Binance')
+        exchange_api_key_id: ID of stored exchange API key in Jesse
+        starting_balance: Initial capital (default: 10000)
+        leverage: Futures leverage (default: 1)
+        fee: Trading fee rate (default: 0.001)
+        session_id: Optional custom session ID (auto-generated if not provided)
+
+    Returns:
+        Dict with session_id, status, and configuration
+    """
+    try:
+        from jesse_mcp.core.jesse_rest_client import get_jesse_rest_client
+
+        client = get_jesse_rest_client()
+
+        config = {
+            "starting_balance": starting_balance,
+            "fee": fee,
+            "futures_leverage": leverage,
+        }
+
+        result = client.start_live_session(
+            strategy=strategy,
+            symbol=symbol,
+            timeframe=timeframe,
+            exchange=exchange,
+            exchange_api_key_id=exchange_api_key_id,
+            paper_mode=True,
+            config=config,
+        )
+
+        if "error" not in result:
+            result["mode"] = "paper"
+            result["starting_balance"] = starting_balance
+            result["leverage"] = leverage
+            result["fee"] = fee
+
+        return result
+    except Exception as e:
+        logger.error(f"Paper trading start failed: {e}")
+        return {"error": str(e), "error_type": type(e).__name__}
+
+
+@mcp.tool
+def paper_stop(session_id: str) -> dict:
+    """
+    Stop a paper trading session and return final metrics.
+
+    Args:
+        session_id: Session ID to stop
+
+    Returns:
+        Dict with stopped_at, duration, and final_metrics
+    """
+    try:
+        from jesse_mcp.core.jesse_rest_client import get_jesse_rest_client
+        from datetime import datetime
+
+        client = get_jesse_rest_client()
+
+        result = client.cancel_live_session(session_id, paper_mode=True)
+
+        if "error" not in result:
+            session = client.get_live_session(session_id)
+            result["stopped_at"] = datetime.utcnow().isoformat()
+            result["final_metrics"] = session.get("session", {}).get("metrics", {})
+
+        return result
+    except Exception as e:
+        logger.error(f"Paper trading stop failed: {e}")
+        return {"error": str(e), "error_type": type(e).__name__}
+
+
+@mcp.tool
+def paper_status(session_id: str) -> dict:
+    """
+    Get current status of a paper trading session.
+
+    Args:
+        session_id: Session ID to check
+
+    Returns:
+        Dict with session status, equity, positions, and metrics
+    """
+    try:
+        from jesse_mcp.core.jesse_rest_client import get_jesse_rest_client
+
+        client = get_jesse_rest_client()
+        return client.get_live_session(session_id)
+    except Exception as e:
+        logger.error(f"Paper status failed: {e}")
+        return {"error": str(e), "session": None}
+
+
+@mcp.tool
+def paper_get_trades(session_id: str, limit: int = 100, offset: int = 0) -> dict:
+    """
+    Get trades executed in a paper trading session.
+
+    Args:
+        session_id: Session ID
+        limit: Maximum number of trades to return (default: 100)
+        offset: Offset for pagination (default: 0)
+
+    Returns:
+        Dict with total_trades and trades list
+    """
+    try:
+        from jesse_mcp.core.jesse_rest_client import get_jesse_rest_client
+
+        client = get_jesse_rest_client()
+        result = client.get_closed_trades(session_id, limit)
+
+        trades = result.get("data", [])
+        if offset > 0:
+            trades = trades[offset:]
+
+        return {
+            "session_id": session_id,
+            "total_trades": len(result.get("data", [])),
+            "trades": trades,
+        }
+    except Exception as e:
+        logger.error(f"Paper get trades failed: {e}")
+        return {"error": str(e), "trades": []}
+
+
+@mcp.tool
+def paper_get_equity(session_id: str, resolution: str = "1h") -> dict:
+    """
+    Get equity curve data for a paper trading session.
+
+    Args:
+        session_id: Session ID
+        resolution: Resolution of equity curve data (default: '1h')
+
+    Returns:
+        Dict with equity_curve containing timestamp, equity, drawdown data
+    """
+    try:
+        from jesse_mcp.core.jesse_rest_client import get_jesse_rest_client
+
+        client = get_jesse_rest_client()
+
+        timeframe_map = {
+            "1m": 60000,
+            "5m": 300000,
+            "15m": 900000,
+            "1h": 3600000,
+            "4h": 14400000,
+            "1d": 86400000,
+        }
+        max_points = 1000
+
+        result = client.get_live_equity_curve(
+            session_id,
+            timeframe=resolution,
+            max_points=max_points,
+        )
+
+        return {
+            "session_id": session_id,
+            "resolution": resolution,
+            "equity_curve": result.get("data", []),
+        }
+    except Exception as e:
+        logger.error(f"Paper get equity failed: {e}")
+        return {"error": str(e), "equity_curve": []}
+
+
+@mcp.tool
+def paper_get_metrics(session_id: str) -> dict:
+    """
+    Get calculated performance metrics for a paper trading session.
+
+    Args:
+        session_id: Session ID
+
+    Returns:
+        Dict with metrics: total_return, sharpe_ratio, max_drawdown, win_rate, etc.
+    """
+    try:
+        from jesse_mcp.core.jesse_rest_client import get_jesse_rest_client
+
+        client = get_jesse_rest_client()
+        session = client.get_live_session(session_id)
+
+        session_data = session.get("session", {})
+        metrics = session_data.get("metrics", {})
+
+        return {
+            "session_id": session_id,
+            "metrics": metrics,
+        }
+    except Exception as e:
+        logger.error(f"Paper get metrics failed: {e}")
+        return {"error": str(e), "metrics": {}}
+
+
+@mcp.tool
+def paper_list_sessions() -> dict:
+    """
+    List all paper trading sessions.
+
+    Returns:
+        Dict with sessions list and total count
+    """
+    try:
+        from jesse_mcp.core.jesse_rest_client import get_jesse_rest_client
+
+        client = get_jesse_rest_client()
+        return client.get_live_sessions()
+    except Exception as e:
+        logger.error(f"Paper list sessions failed: {e}")
+        return {"error": str(e), "sessions": []}
+
+
+@mcp.tool
+def paper_update_session(session_id: str, notes: Optional[str] = None) -> dict:
+    """
+    Update session parameters (limited to safe modifications).
+
+    Args:
+        session_id: Session ID to update
+        notes: Notes text to associate with session
+
+    Returns:
+        Dict with update status
+    """
+    try:
+        from jesse_mcp.core.jesse_rest_client import get_jesse_rest_client
+
+        client = get_jesse_rest_client()
+
+        if notes is not None:
+            return client.update_live_session_notes(session_id, notes)
+
+        return {"session_id": session_id, "status": "no_updates"}
+    except Exception as e:
+        logger.error(f"Paper update session failed: {e}")
+        return {"error": str(e), "error_type": type(e).__name__}
+
+
 # ==================== MAIN ENTRY POINT ====================
 
 
