@@ -719,7 +719,7 @@ class JesseRESTClient:
         return result
 
     def _poll_backtest_result(
-        self, backtest_id: str, poll_interval: float = 1.0, max_poll_time: float = 60.0
+        self, backtest_id: str, poll_interval: float = 1.0, max_poll_time: float = 300.0
     ) -> Dict[str, Any]:
         """
         Poll for backtest completion and return results.
