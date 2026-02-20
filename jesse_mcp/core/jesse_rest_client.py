@@ -394,6 +394,16 @@ class JesseRESTClient:
 
             result = self._rate_limited_backtest(payload)
 
+            # Validate the result before returning
+            is_valid, message = self._validate_backtest_result(result)
+            if not is_valid:
+                logger.warning(f"⚠️  Backtest result validation failed: {message}")
+                return {
+                    "error": f"Invalid backtest result: {message}",
+                    "success": False,
+                    "raw_result": result,
+                }
+
             logger.info(f"✅ Backtest completed for {strategy}")
             return result
 
@@ -482,6 +492,141 @@ class JesseRESTClient:
 
         return result
 
+    def backtest_with_retry(
+        self,
+        strategy: str,
+        symbol: str,
+        timeframe: str,
+        start_date: str,
+        end_date: str,
+        exchange: str = "Binance",
+        starting_balance: float = 10000,
+        fee: float = 0.001,
+        leverage: float = 1,
+        exchange_type: str = "futures",
+        hyperparameters: Optional[Dict[str, Any]] = None,
+        max_retries: int = 3,
+        initial_delay: float = 1.0,
+    ) -> Dict[str, Any]:
+        """
+        Run a backtest with retry logic for transient errors.
+
+        Implements exponential backoff retry strategy for handling temporary failures.
+
+        Args:
+            strategy: Strategy name
+            symbol: Trading symbol
+            timeframe: Candle timeframe
+            start_date: Start date YYYY-MM-DD
+            end_date: End date YYYY-MM-DD
+            exchange: Exchange name
+            starting_balance: Initial capital
+            fee: Trading fee
+            leverage: Leverage for futures
+            exchange_type: 'spot' or 'futures'
+            hyperparameters: Strategy parameter overrides
+            max_retries: Maximum number of retry attempts (default: 3)
+            initial_delay: Initial delay in seconds for exponential backoff (default: 1.0)
+
+        Returns:
+            Backtest results dict
+        """
+        import time
+
+        last_error = None
+
+        for attempt in range(max_retries):
+            try:
+                logger.info(f"Backtest attempt {attempt + 1}/{max_retries}: {strategy} on {symbol}")
+
+                result = self.backtest(
+                    strategy=strategy,
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    start_date=start_date,
+                    end_date=end_date,
+                    exchange=exchange,
+                    starting_balance=starting_balance,
+                    fee=fee,
+                    leverage=leverage,
+                    exchange_type=exchange_type,
+                    hyperparameters=hyperparameters,
+                )
+
+                # Check if result is successful
+                if "error" not in result and result.get("success", True):
+                    logger.info(f"✅ Backtest succeeded on attempt {attempt + 1}/{max_retries}")
+                    return result
+
+                # If we have an error, determine if it's retryable
+                error_msg = result.get("error", "Unknown error")
+                if self._is_retryable_error(error_msg):
+                    last_error = error_msg
+                    if attempt < max_retries - 1:
+                        delay = initial_delay * (2**attempt)  # Exponential backoff
+                        logger.warning(f"⚠️  Retryable error: {error_msg}. Retrying in {delay}s...")
+                        time.sleep(delay)
+                        continue
+                else:
+                    # Non-retryable error, return immediately
+                    logger.error(f"❌ Non-retryable error: {error_msg}")
+                    return result
+
+            except requests.exceptions.Timeout:
+                last_error = "Request timeout"
+                logger.warning(f"⚠️  Timeout on attempt {attempt + 1}/{max_retries}")
+                if attempt < max_retries - 1:
+                    delay = initial_delay * (2**attempt)
+                    logger.info(f"Retrying in {delay}s...")
+                    time.sleep(delay)
+                    continue
+            except requests.exceptions.ConnectionError:
+                last_error = "Connection error"
+                logger.warning(f"⚠️  Connection error on attempt {attempt + 1}/{max_retries}")
+                if attempt < max_retries - 1:
+                    delay = initial_delay * (2**attempt)
+                    logger.info(f"Retrying in {delay}s...")
+                    time.sleep(delay)
+                    continue
+            except Exception as e:
+                last_error = str(e)
+                logger.error(f"❌ Unexpected error on attempt {attempt + 1}: {e}")
+                if attempt < max_retries - 1:
+                    delay = initial_delay * (2**attempt)
+                    logger.info(f"Retrying in {delay}s...")
+                    time.sleep(delay)
+                    continue
+
+        # All retries exhausted
+        logger.error(f"❌ All {max_retries} retry attempts failed. Last error: {last_error}")
+        return {
+            "error": f"Backtest failed after {max_retries} retries: {last_error}",
+            "success": False,
+        }
+
+    def _is_retryable_error(self, error_msg: str) -> bool:
+        """
+        Determine if an error is retryable (transient).
+
+        Args:
+            error_msg: Error message from backtest
+
+        Returns:
+            True if error is transient and should be retried
+        """
+        retryable_keywords = [
+            "timeout",
+            "rate limit",
+            "temporary",
+            "temporarily unavailable",
+            "connection",
+            "temporarily",
+            "service unavailable",
+            "gateway timeout",
+        ]
+        error_lower = error_msg.lower()
+        return any(keyword in error_lower for keyword in retryable_keywords)
+
     def get_strategies_cached(self) -> Dict[str, Any]:
         """
         Get list of strategies with caching (5 minute TTL by default).
@@ -524,29 +669,72 @@ class JesseRESTClient:
             return None
         return getattr(self.session, method)(f"{self.base_url}{endpoint}", **kwargs)
 
-    def _rate_limited_backtest(self, payload: dict) -> Dict[str, Any]:
+    def _rate_limited_backtest(self, payload: dict, timeout: int = 300) -> Dict[str, Any]:
         limiter = get_rate_limiter()
         if not limiter.acquire():
             return {"error": "Rate limit exceeded", "success": False}
-        response = self.session.post(f"{self.base_url}/backtest", json=payload)
+        response = self.session.post(f"{self.base_url}/backtest", json=payload, timeout=timeout)
         response.raise_for_status()
         return response.json()
 
-    def _rate_limited_optimization(self, payload: dict) -> Dict[str, Any]:
+    def _rate_limited_optimization(self, payload: dict, timeout: int = 600) -> Dict[str, Any]:
         limiter = get_rate_limiter()
         if not limiter.acquire():
             return {"error": "Rate limit exceeded", "success": False}
-        response = self.session.post(f"{self.base_url}/optimization", json=payload)
+        response = self.session.post(f"{self.base_url}/optimization", json=payload, timeout=timeout)
         response.raise_for_status()
         return response.json()
 
-    def _rate_limited_monte_carlo(self, payload: dict) -> Dict[str, Any]:
+    def _rate_limited_monte_carlo(self, payload: dict, timeout: int = 600) -> Dict[str, Any]:
         limiter = get_rate_limiter()
         if not limiter.acquire():
             return {"error": "Rate limit exceeded", "success": False}
-        response = self.session.post(f"{self.base_url}/monte-carlo", json=payload)
+        response = self.session.post(f"{self.base_url}/monte-carlo", json=payload, timeout=timeout)
         response.raise_for_status()
         return response.json()
+
+    def _validate_backtest_result(self, result: Dict[str, Any]) -> tuple:
+        """
+        Validate that backtest result is complete and usable.
+
+        Args:
+            result: Backtest result dictionary from API
+
+        Returns:
+            (is_valid: bool, message: str) - Validation status and details
+        """
+        if not isinstance(result, dict):
+            return False, "Result is not a dictionary"
+
+        # Check for error responses
+        if "error" in result:
+            return False, f"Error in result: {result.get('error')}"
+
+        # Check for processing status (incomplete)
+        if result.get("status") == "processing":
+            return False, "Backtest still processing (incomplete)"
+
+        # Check for empty result
+        if not result:
+            return False, "Result is empty"
+
+        # Check for at least one meaningful metric field
+        metric_fields = ["total_return", "sharpe_ratio", "max_drawdown", "win_rate", "total_trades"]
+        has_metrics = any(f in result for f in metric_fields)
+        if not has_metrics:
+            return False, f"Result missing all metric fields: {', '.join(metric_fields)}"
+
+        # Check for NaN or invalid numeric values in present fields
+        for field in metric_fields:
+            if field in result:
+                try:
+                    value = float(result[field])
+                    if value != value:  # NaN check
+                        return False, f"Field {field} contains NaN"
+                except (TypeError, ValueError):
+                    return False, f"Field {field} is not numeric: {result[field]}"
+
+        return True, "Result validation passed"
 
     def optimization(
         self,

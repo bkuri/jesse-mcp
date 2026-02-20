@@ -152,9 +152,7 @@ class TestAuthenticateWithPassword:
     @patch("jesse_mcp.core.jesse_rest_client.requests.post")
     def test_authenticate_connection_error(self, mock_post, mock_session_class):
         """Test authentication when connection fails"""
-        mock_post.side_effect = requests.exceptions.ConnectionError(
-            "Connection refused"
-        )
+        mock_post.side_effect = requests.exceptions.ConnectionError("Connection refused")
 
         mock_session = Mock()
         mock_session_class.return_value = mock_session
@@ -765,9 +763,7 @@ class TestCachedBacktest:
         )
 
         with patch("jesse_mcp.core.jesse_rest_client.JESSE_CACHE_ENABLED", False):
-            with patch(
-                "jesse_mcp.core.jesse_rest_client.get_rate_limiter"
-            ) as mock_limiter:
+            with patch("jesse_mcp.core.jesse_rest_client.get_rate_limiter") as mock_limiter:
                 mock_limiter.return_value = Mock(acquire=Mock(return_value=True))
 
                 result = client.cached_backtest(
@@ -843,6 +839,214 @@ class TestGetStrategiesCached:
 
             assert "error" in result
             assert result["strategies"] == []
+
+
+class TestValidateBacktestResult:
+    """Tests for _validate_backtest_result helper method"""
+
+    def test_validate_success_all_fields(self):
+        """Test validation passes with all fields"""
+        from jesse_mcp.core.jesse_rest_client import JesseRESTClient
+
+        client = JesseRESTClient.__new__(JesseRESTClient)
+
+        result = {
+            "total_return": 0.25,
+            "sharpe_ratio": 1.5,
+            "max_drawdown": -0.1,
+            "win_rate": 0.55,
+        }
+
+        is_valid, message = client._validate_backtest_result(result)
+        assert is_valid
+        assert message == "Result validation passed"
+
+    def test_validate_success_partial_fields(self):
+        """Test validation passes with at least one metric field"""
+        from jesse_mcp.core.jesse_rest_client import JesseRESTClient
+
+        client = JesseRESTClient.__new__(JesseRESTClient)
+
+        result = {"total_return": 0.25}
+
+        is_valid, message = client._validate_backtest_result(result)
+        assert is_valid
+        assert "passed" in message.lower()
+
+    def test_validate_failure_no_metrics(self):
+        """Test validation fails when no metric fields present"""
+        from jesse_mcp.core.jesse_rest_client import JesseRESTClient
+
+        client = JesseRESTClient.__new__(JesseRESTClient)
+
+        result = {"strategy": "TestStrategy", "symbol": "BTC-USDT"}
+
+        is_valid, message = client._validate_backtest_result(result)
+        assert not is_valid
+        assert "metric" in message.lower()
+
+    def test_validate_failure_error_in_result(self):
+        """Test validation fails when error key present"""
+        from jesse_mcp.core.jesse_rest_client import JesseRESTClient
+
+        client = JesseRESTClient.__new__(JesseRESTClient)
+
+        result = {"error": "Backtest failed"}
+
+        is_valid, message = client._validate_backtest_result(result)
+        assert not is_valid
+        assert "error" in message.lower()
+
+    def test_validate_failure_processing_status(self):
+        """Test validation fails when status is processing"""
+        from jesse_mcp.core.jesse_rest_client import JesseRESTClient
+
+        client = JesseRESTClient.__new__(JesseRESTClient)
+
+        result = {"status": "processing", "total_return": 0.25}
+
+        is_valid, message = client._validate_backtest_result(result)
+        assert not is_valid
+        assert "processing" in message.lower()
+
+    def test_validate_failure_nan_value(self):
+        """Test validation fails when field contains NaN"""
+        from jesse_mcp.core.jesse_rest_client import JesseRESTClient
+        import math
+
+        client = JesseRESTClient.__new__(JesseRESTClient)
+
+        result = {"total_return": math.nan, "sharpe_ratio": 1.5}
+
+        is_valid, message = client._validate_backtest_result(result)
+        assert not is_valid
+        assert "nan" in message.lower()
+
+    def test_validate_failure_non_numeric(self):
+        """Test validation fails when numeric field is not numeric"""
+        from jesse_mcp.core.jesse_rest_client import JesseRESTClient
+
+        client = JesseRESTClient.__new__(JesseRESTClient)
+
+        result = {"total_return": "not a number", "sharpe_ratio": 1.5}
+
+        is_valid, message = client._validate_backtest_result(result)
+        assert not is_valid
+        assert "numeric" in message.lower()
+
+
+class TestBacktestWithRetry:
+    """Tests for backtest_with_retry method"""
+
+    def test_backtest_with_retry_success_first_attempt(self):
+        """Test backtest succeeds on first attempt"""
+        from jesse_mcp.core.jesse_rest_client import JesseRESTClient
+
+        client = JesseRESTClient.__new__(JesseRESTClient)
+        client.base_url = "http://test:8000"
+
+        # Mock successful backtest
+        successful_result = {
+            "total_return": 0.25,
+            "sharpe_ratio": 1.5,
+            "max_drawdown": -0.1,
+            "win_rate": 0.55,
+        }
+
+        with patch.object(client, "backtest", return_value=successful_result):
+            result = client.backtest_with_retry(
+                strategy="TestStrategy",
+                symbol="BTC-USDT",
+                timeframe="1h",
+                start_date="2023-01-01",
+                end_date="2023-12-31",
+            )
+
+            assert result == successful_result
+
+    def test_backtest_with_retry_success_after_retries(self):
+        """Test backtest succeeds after retries"""
+        from jesse_mcp.core.jesse_rest_client import JesseRESTClient
+
+        client = JesseRESTClient.__new__(JesseRESTClient)
+
+        successful_result = {
+            "total_return": 0.25,
+            "sharpe_ratio": 1.5,
+        }
+
+        # Fail first, then succeed
+        with patch.object(
+            client,
+            "backtest",
+            side_effect=[
+                {"error": "Rate limit exceeded"},
+                successful_result,
+            ],
+        ):
+            result = client.backtest_with_retry(
+                strategy="TestStrategy",
+                symbol="BTC-USDT",
+                timeframe="1h",
+                start_date="2023-01-01",
+                end_date="2023-12-31",
+                max_retries=3,
+                initial_delay=0.01,
+            )
+
+            assert result == successful_result
+
+    def test_backtest_with_retry_failure_all_attempts(self):
+        """Test backtest fails after all retry attempts"""
+        from jesse_mcp.core.jesse_rest_client import JesseRESTClient
+
+        client = JesseRESTClient.__new__(JesseRESTClient)
+
+        # Always fail
+        with patch.object(
+            client,
+            "backtest",
+            return_value={"error": "Service unavailable"},
+        ):
+            result = client.backtest_with_retry(
+                strategy="TestStrategy",
+                symbol="BTC-USDT",
+                timeframe="1h",
+                start_date="2023-01-01",
+                end_date="2023-12-31",
+                max_retries=2,
+                initial_delay=0.01,
+            )
+
+            assert "error" in result
+            assert "failed after" in result["error"].lower()
+
+    def test_is_retryable_error_timeout(self):
+        """Test _is_retryable_error identifies timeout"""
+        from jesse_mcp.core.jesse_rest_client import JesseRESTClient
+
+        client = JesseRESTClient.__new__(JesseRESTClient)
+
+        assert client._is_retryable_error("Request timeout after 300s")
+        assert client._is_retryable_error("timeout")
+
+    def test_is_retryable_error_rate_limit(self):
+        """Test _is_retryable_error identifies rate limit"""
+        from jesse_mcp.core.jesse_rest_client import JesseRESTClient
+
+        client = JesseRESTClient.__new__(JesseRESTClient)
+
+        assert client._is_retryable_error("Rate limit exceeded")
+        assert client._is_retryable_error("rate limit")
+
+    def test_is_retryable_error_not_retryable(self):
+        """Test _is_retryable_error identifies non-retryable errors"""
+        from jesse_mcp.core.jesse_rest_client import JesseRESTClient
+
+        client = JesseRESTClient.__new__(JesseRESTClient)
+
+        assert not client._is_retryable_error("Invalid strategy")
+        assert not client._is_retryable_error("Authentication failed")
 
 
 class TestGetJesseRestClient:
