@@ -674,7 +674,7 @@ class JesseRESTClient:
         payload: dict,
         timeout: int = 300,
         poll_interval: float = 1.0,
-        max_poll_time: float = 60.0,
+        max_poll_time: float = 300.0,
     ) -> Dict[str, Any]:
         """
         Submit a backtest and poll for results.
@@ -684,9 +684,9 @@ class JesseRESTClient:
 
         Args:
             payload: Backtest payload with 'id' field
-            timeout: HTTP request timeout
-            poll_interval: Seconds between polls
-            max_poll_time: Maximum time to wait for completion
+            timeout: HTTP request timeout (default: 300s)
+            poll_interval: Seconds between polls (default: 1.0)
+            max_poll_time: Maximum time to wait for completion (default: 300s = 5 minutes)
 
         Returns:
             Backtest result with metrics
