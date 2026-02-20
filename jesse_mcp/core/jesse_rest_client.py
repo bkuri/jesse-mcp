@@ -669,13 +669,181 @@ class JesseRESTClient:
             return None
         return getattr(self.session, method)(f"{self.base_url}{endpoint}", **kwargs)
 
-    def _rate_limited_backtest(self, payload: dict, timeout: int = 300) -> Dict[str, Any]:
+    def _rate_limited_backtest(
+        self,
+        payload: dict,
+        timeout: int = 300,
+        poll_interval: float = 1.0,
+        max_poll_time: float = 60.0,
+    ) -> Dict[str, Any]:
+        """
+        Submit a backtest and poll for results.
+
+        Jesse API is async - POST /backtest returns 202 immediately.
+        We need to poll /backtest/sessions until status='finished'.
+
+        Args:
+            payload: Backtest payload with 'id' field
+            timeout: HTTP request timeout
+            poll_interval: Seconds between polls
+            max_poll_time: Maximum time to wait for completion
+
+        Returns:
+            Backtest result with metrics
+        """
+        import time
+
         limiter = get_rate_limiter()
         if not limiter.acquire():
             return {"error": "Rate limit exceeded", "success": False}
+
+        backtest_id = payload.get("id")
+        if not backtest_id:
+            return {"error": "Missing backtest ID in payload", "success": False}
+
+        # Submit backtest
         response = self.session.post(f"{self.base_url}/backtest", json=payload, timeout=timeout)
         response.raise_for_status()
-        return response.json()
+        result = response.json()
+
+        # Check if immediate result (older Jesse versions)
+        if "total_return" in result or "metrics" in result:
+            logger.info(f"✅ Backtest returned immediate result")
+            return result
+
+        # Async mode - poll for completion
+        if response.status_code == 202 or result.get("message", "").startswith("Started"):
+            logger.info(f"⏳ Backtest {backtest_id[:8]} started, polling for completion...")
+            return self._poll_backtest_result(backtest_id, poll_interval, max_poll_time)
+
+        return result
+
+    def _poll_backtest_result(
+        self, backtest_id: str, poll_interval: float = 1.0, max_poll_time: float = 60.0
+    ) -> Dict[str, Any]:
+        """
+        Poll for backtest completion and return results.
+
+        Args:
+            backtest_id: UUID of the backtest
+            poll_interval: Seconds between polls
+            max_poll_time: Maximum time to wait
+
+        Returns:
+            Backtest result with metrics
+        """
+        import time
+
+        start_time = time.time()
+        limiter = get_rate_limiter()
+
+        while time.time() - start_time < max_poll_time:
+            if not limiter.acquire():
+                time.sleep(0.5)
+                continue
+
+            try:
+                # Get session status
+                response = self.session.post(
+                    f"{self.base_url}/backtest/sessions",
+                    json={},
+                    timeout=10,
+                )
+                response.raise_for_status()
+                sessions = response.json().get("sessions", [])
+
+                # Find our session
+                for session in sessions:
+                    if session.get("id") == backtest_id:
+                        status = session.get("status")
+                        logger.debug(f"Backtest {backtest_id[:8]} status: {status}")
+
+                        if status == "finished":
+                            logger.info(f"✅ Backtest {backtest_id[:8]} finished")
+                            return self._get_backtest_session_result(backtest_id)
+                        elif status == "failed" or status == "error":
+                            logger.error(f"❌ Backtest {backtest_id[:8]} failed")
+                            return {
+                                "error": "Backtest failed",
+                                "success": False,
+                                "session": session,
+                            }
+
+                # Session not found yet, keep polling
+                time.sleep(poll_interval)
+
+            except Exception as e:
+                logger.warning(f"Error polling backtest status: {e}")
+                time.sleep(poll_interval)
+
+        logger.error(f"❌ Backtest {backtest_id[:8]} timed out after {max_poll_time}s")
+        return {"error": f"Backtest timed out after {max_poll_time}s", "success": False}
+
+    def _get_backtest_session_result(self, backtest_id: str) -> Dict[str, Any]:
+        """
+        Get full backtest result from session.
+
+        Args:
+            backtest_id: UUID of the backtest
+
+        Returns:
+            Backtest result with extracted metrics
+        """
+        try:
+            response = self.session.post(
+                f"{self.base_url}/backtest/sessions/{backtest_id}",
+                json={},
+                timeout=30,
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            # Extract session and metrics
+            session = data.get("session", {})
+            metrics = session.get("metrics", {})
+
+            if not metrics:
+                logger.warning(f"Empty metrics in backtest result")
+                return {"error": "Empty metrics in result", "success": False, "session": session}
+
+            # Convert to standard format
+            result = {
+                "id": backtest_id,
+                "status": session.get("status"),
+                "total_return": metrics.get("net_profit_percentage"),
+                "sharpe_ratio": metrics.get("sharpe_ratio"),
+                "max_drawdown": metrics.get("max_drawdown"),
+                "win_rate": metrics.get("win_rate"),
+                "total_trades": metrics.get("total"),
+                "total_winning_trades": metrics.get("total_winning_trades"),
+                "total_losing_trades": metrics.get("total_losing_trades"),
+                "starting_balance": metrics.get("starting_balance"),
+                "finishing_balance": metrics.get("finishing_balance"),
+                "net_profit": metrics.get("net_profit"),
+                "annual_return": metrics.get("annual_return"),
+                "expectancy": metrics.get("expectancy"),
+                "average_win": metrics.get("average_win"),
+                "average_loss": metrics.get("average_loss"),
+                "largest_winning_trade": metrics.get("largest_winning_trade"),
+                "largest_losing_trade": metrics.get("largest_losing_trade"),
+                "max_underwater_period": metrics.get("max_underwater_period"),
+                "winning_streak": metrics.get("winning_streak"),
+                "losing_streak": metrics.get("losing_streak"),
+                "equity_curve": session.get("equity_curve"),
+                "trades": session.get("trades"),
+                "execution_duration": session.get("execution_duration"),
+                "strategy_codes": session.get("strategy_codes"),
+                "success": True,
+            }
+
+            logger.info(
+                f"✅ Retrieved backtest result: return={result['total_return']:.2f}%, sharpe={result['sharpe_ratio']:.2f}"
+            )
+            return result
+
+        except Exception as e:
+            logger.error(f"❌ Failed to get backtest result: {e}")
+            return {"error": str(e), "success": False}
 
     def _rate_limited_optimization(self, payload: dict, timeout: int = 600) -> Dict[str, Any]:
         limiter = get_rate_limiter()
