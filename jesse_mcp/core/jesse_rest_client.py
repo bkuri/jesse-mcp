@@ -661,6 +661,80 @@ class JesseRESTClient:
             logger.error(f"❌ Failed to get strategies: {e}")
             return {"error": str(e), "strategies": []}
 
+    def _estimate_max_backtest_time(
+        self,
+        start_date: str,
+        end_date: str,
+        timeframe: str = "1h",
+        safety_factor: float = 3.0,
+    ) -> float:
+        """
+        Estimate maximum backtest time based on candle count.
+
+        Uses conservative performance estimate to calculate timeout.
+        Helps abort zombie backtests that hang indefinitely.
+
+        Args:
+            start_date: Start date YYYY-MM-DD
+            end_date: End date YYYY-MM-DD
+            timeframe: Candle timeframe
+            safety_factor: Multiplier for safety margin (default: 3x)
+
+        Returns:
+            Estimated max time in seconds
+        """
+        from datetime import datetime
+
+        # Timeframe to minutes mapping
+        timeframe_minutes = {
+            "1m": 1,
+            "3m": 3,
+            "5m": 5,
+            "15m": 15,
+            "30m": 30,
+            "1h": 60,
+            "2h": 120,
+            "4h": 240,
+            "6h": 360,
+            "12h": 720,
+            "1d": 1440,
+        }
+
+        # Parse dates
+        try:
+            start = datetime.strptime(start_date, "%Y-%m-%d")
+            end = datetime.strptime(end_date, "%Y-%m-%d")
+            days = (end - start).days
+        except ValueError:
+            days = 30  # Default to 30 days if parsing fails
+
+        # Calculate candles
+        minutes = timeframe_minutes.get(timeframe, 60)
+        warmup_candles = 240
+        trading_candles = (days * 24 * 60) // minutes if minutes > 0 else days * 24
+        total_candles = trading_candles + warmup_candles
+
+        # Conservative performance: 500 candles/sec (worst case)
+        # Normal is ~2000 candles/sec, but we use conservative for safety
+        CONSERVATIVE_CANDLES_PER_SEC = 500
+
+        # Calculate estimated time with safety margin
+        estimated_time = total_candles / CONSERVATIVE_CANDLES_PER_SEC
+        max_time = estimated_time * safety_factor
+
+        # Apply bounds
+        MIN_TIMEOUT = 30  # At least 30 seconds
+        MAX_TIMEOUT = 600  # Cap at 10 minutes for single backtest
+
+        max_time = max(MIN_TIMEOUT, min(max_time, MAX_TIMEOUT))
+
+        logger.info(
+            f"📊 Estimated backtest time: {total_candles} candles, "
+            f"~{estimated_time:.1f}s expected, {max_time:.1f}s max timeout"
+        )
+
+        return max_time
+
     def _rate_limited_request(
         self, method: str, endpoint: str, **kwargs
     ) -> Optional[requests.Response]:
@@ -674,7 +748,7 @@ class JesseRESTClient:
         payload: dict,
         timeout: int = 300,
         poll_interval: float = 1.0,
-        max_poll_time: float = 300.0,
+        max_poll_time: Optional[float] = None,
     ) -> Dict[str, Any]:
         """
         Submit a backtest and poll for results.
@@ -686,7 +760,8 @@ class JesseRESTClient:
             payload: Backtest payload with 'id' field
             timeout: HTTP request timeout (default: 300s)
             poll_interval: Seconds between polls (default: 1.0)
-            max_poll_time: Maximum time to wait for completion (default: 300s = 5 minutes)
+            max_poll_time: Maximum time to wait for completion.
+                          If None, calculates dynamically based on date range.
 
         Returns:
             Backtest result with metrics
@@ -700,6 +775,15 @@ class JesseRESTClient:
         backtest_id = payload.get("id")
         if not backtest_id:
             return {"error": "Missing backtest ID in payload", "success": False}
+
+        # Calculate dynamic timeout if not provided
+        if max_poll_time is None:
+            start_date = payload.get("start_date", "")
+            end_date = payload.get("finish_date", payload.get("end_date", ""))
+            timeframe = "1h"
+            if payload.get("routes"):
+                timeframe = payload["routes"][0].get("timeframe", "1h")
+            max_poll_time = self._estimate_max_backtest_time(start_date, end_date, timeframe)
 
         # Submit backtest
         response = self.session.post(f"{self.base_url}/backtest", json=payload, timeout=timeout)
@@ -724,6 +808,8 @@ class JesseRESTClient:
         """
         Poll for backtest completion and return results.
 
+        Includes zombie detection - aborts backtests that run too long.
+
         Args:
             backtest_id: UUID of the backtest
             poll_interval: Seconds between polls
@@ -736,6 +822,9 @@ class JesseRESTClient:
 
         start_time = time.time()
         limiter = get_rate_limiter()
+        last_status = None
+        last_status_time = start_time
+        zombie_warning_threshold = max_poll_time * 0.5  # Warn at 50% of max time
 
         while time.time() - start_time < max_poll_time:
             if not limiter.acquire():
@@ -756,18 +845,35 @@ class JesseRESTClient:
                 for session in sessions:
                     if session.get("id") == backtest_id:
                         status = session.get("status")
-                        logger.debug(f"Backtest {backtest_id[:8]} status: {status}")
+                        elapsed = time.time() - start_time
+
+                        # Track status changes
+                        if status != last_status:
+                            last_status = status
+                            last_status_time = time.time()
+                            logger.debug(
+                                f"Backtest {backtest_id[:8]} status: {status} at {elapsed:.1f}s"
+                            )
 
                         if status == "finished":
-                            logger.info(f"✅ Backtest {backtest_id[:8]} finished")
+                            logger.info(f"✅ Backtest {backtest_id[:8]} finished in {elapsed:.1f}s")
                             return self._get_backtest_session_result(backtest_id)
                         elif status == "failed" or status == "error":
-                            logger.error(f"❌ Backtest {backtest_id[:8]} failed")
+                            logger.error(
+                                f"❌ Backtest {backtest_id[:8]} failed after {elapsed:.1f}s"
+                            )
                             return {
                                 "error": "Backtest failed",
                                 "success": False,
                                 "session": session,
                             }
+                        elif status == "running":
+                            # Zombie detection: warn if running too long
+                            if elapsed > zombie_warning_threshold:
+                                logger.warning(
+                                    f"⚠️ Backtest {backtest_id[:8]} still running after "
+                                    f"{elapsed:.1f}s (max: {max_poll_time:.1f}s) - possible zombie"
+                                )
 
                 # Session not found yet, keep polling
                 time.sleep(poll_interval)
@@ -776,8 +882,18 @@ class JesseRESTClient:
                 logger.warning(f"Error polling backtest status: {e}")
                 time.sleep(poll_interval)
 
-        logger.error(f"❌ Backtest {backtest_id[:8]} timed out after {max_poll_time}s")
-        return {"error": f"Backtest timed out after {max_poll_time}s", "success": False}
+        # Timeout - mark as zombie
+        elapsed = time.time() - start_time
+        logger.error(
+            f"❌ Backtest {backtest_id[:8]} timed out after {elapsed:.1f}s - "
+            f"likely zombie process (max allowed: {max_poll_time:.1f}s)"
+        )
+        return {
+            "error": f"Backtest timed out after {elapsed:.1f}s (zombie detected)",
+            "success": False,
+            "zombie": True,
+            "max_allowed_time": max_poll_time,
+        }
 
     def _get_backtest_session_result(self, backtest_id: str) -> Dict[str, Any]:
         """
