@@ -724,6 +724,114 @@ def cache_clear(cache_name: Optional[str] = None) -> dict:
         return {"error": str(e), "error_type": type(e).__name__}
 
 
+@mcp.tool
+def backtest_benchmark(
+    symbol: str = "BTC-USDT",
+    timeframe: str = "1h",
+    days: int = 30,
+    exchange: str = "Binance Spot",
+) -> dict:
+    """
+    Run a benchmark backtest to measure performance metrics.
+
+    Measures backtest execution time and calculates candles/second performance.
+    Useful for understanding how long different backtests will take.
+
+    Args:
+        symbol: Trading symbol (default: BTC-USDT)
+        timeframe: Candle timeframe (default: 1h)
+        days: Number of days to backtest (default: 30)
+        exchange: Exchange name (default: Binance Spot)
+
+    Returns:
+        Dict with benchmark results including execution time and candles/second
+    """
+    import time
+    from datetime import datetime, timedelta
+    from jesse_mcp.core.jesse_rest_client import get_jesse_rest_client
+
+    try:
+        client = get_jesse_rest_client()
+        if client is None:
+            return {"error": "Jesse REST client not available"}
+
+        # Calculate date range
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=days)
+
+        # Calculate expected candles
+        timeframe_minutes = {
+            "1m": 1,
+            "5m": 5,
+            "15m": 15,
+            "30m": 30,
+            "1h": 60,
+            "4h": 240,
+            "1d": 1440,
+        }
+        minutes = timeframe_minutes.get(timeframe, 60)
+        warmup_candles = 240
+        trading_candles = (days * 24 * 60) // minutes
+        total_candles = trading_candles + warmup_candles
+
+        # Run backtest with timing
+        start_time = time.time()
+        result = client.backtest(
+            strategy="SMACrossover",
+            symbol=symbol,
+            timeframe=timeframe,
+            start_date=start_date.strftime("%Y-%m-%d"),
+            end_date=end_date.strftime("%Y-%m-%d"),
+            exchange=exchange,
+            exchange_type="spot" if "Spot" in exchange else "futures",
+        )
+        end_time = time.time()
+
+        execution_time = end_time - start_time
+
+        # Calculate performance metrics
+        if execution_time > 0:
+            candles_per_second = total_candles / execution_time
+            candles_per_minute = candles_per_second * 60
+        else:
+            candles_per_second = 0
+            candles_per_minute = 0
+
+        # Extract backtest status
+        status = result.get("status", "unknown")
+        is_mock = result.get("_mock_data", True)
+
+        return {
+            "benchmark_config": {
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "days": days,
+                "exchange": exchange,
+            },
+            "performance": {
+                "execution_time_seconds": round(execution_time, 3),
+                "total_candles": total_candles,
+                "trading_candles": trading_candles,
+                "warmup_candles": warmup_candles,
+                "candles_per_second": round(candles_per_second, 1),
+                "candles_per_minute": round(candles_per_minute, 1),
+            },
+            "backtest_status": status,
+            "mock_data_used": is_mock,
+            "estimates": {
+                "1_month_1h": f"~{round(960 / candles_per_second, 2)}s",
+                "3_months_1h": f"~{round(2400 / candles_per_second, 2)}s",
+                "1_year_1h": f"~{round(8880 / candles_per_second, 2)}s",
+                "1_month_5m": f"~{round(8880 / candles_per_second, 2)}s",
+                "1_month_1m": f"~{round(43440 / candles_per_second, 2)}s",
+            },
+        }
+
+    except Exception as e:
+        logger.error(f"Benchmark failed: {e}")
+        return {"error": str(e), "error_type": type(e).__name__}
+
+
 # ==================== LIVE TRADING TOOLS (Phase 6) ====================
 
 
