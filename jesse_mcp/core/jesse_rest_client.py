@@ -27,7 +27,7 @@ from jesse_mcp.core.cache import (
 logger = logging.getLogger("jesse-mcp.rest-client")
 
 # Get Jesse API configuration from environment
-JESSE_URL = os.getenv("JESSE_URL", "http://localhost:9000")
+JESSE_URL = os.getenv("JESSE_URL", "http://server2:9100")
 JESSE_PASSWORD = os.getenv("JESSE_PASSWORD", "")
 JESSE_API_TOKEN = os.getenv("JESSE_API_TOKEN", "")
 JESSE_API_BASE = JESSE_URL

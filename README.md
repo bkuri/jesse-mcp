@@ -57,7 +57,7 @@ jesse-mcp --help
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `JESSE_URL` | Jesse REST API URL | `http://localhost:9000` |
+| `JESSE_URL` | Jesse REST API URL | `http://server2:9100` |
 | `JESSE_PASSWORD` | Jesse UI password | (required) |
 | `JESSE_API_TOKEN` | Pre-generated API token | (alternative to password) |
 

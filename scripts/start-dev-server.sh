@@ -6,7 +6,7 @@ set -e
 
 # Configuration
 PORT=${JESSE_MCP_PORT:-8100}
-JESSE_URL=${JESSE_URL:-http://localhost:9000}
+JESSE_URL=${JESSE_URL:-http://server2:9100}
 JESSE_PASSWORD=${JESSE_PASSWORD:-test}
 LOG_FILE=/tmp/jesse-mcp-dev.log
 

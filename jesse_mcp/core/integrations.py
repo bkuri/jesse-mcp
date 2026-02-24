@@ -47,7 +47,7 @@ def _check_jesse_ntfy_available() -> bool:
 # This allows jesse-mcp to work without importing Jesse dependencies
 JESSE_AVAILABLE = False
 JESSE_ERROR = None
-JESSE_API_URL = os.getenv("JESSE_URL", "http://localhost:9000")
+JESSE_API_URL = os.getenv("JESSE_URL", "http://server2:9100")
 JESSE_RESEARCH_AVAILABLE = False  # Track if we can import Jesse's research module
 
 try:
@@ -249,9 +249,7 @@ class JesseWrapper:
                 if os.path.isdir(item_path) and not item.startswith("_"):
                     init_file = os.path.join(item_path, "__init__.py")
                     if os.path.exists(init_file):
-                        strategies.append(
-                            {"name": item, "path": item_path, "init_file": init_file}
-                        )
+                        strategies.append({"name": item, "path": item_path, "init_file": init_file})
 
             logger.info(f"Found {len(strategies)} strategies")
             return {
@@ -277,9 +275,7 @@ class JesseWrapper:
             logger.info(f"Reading strategy: {name}")
 
             if not self.strategies_path:
-                raise JesseIntegrationError(
-                    f"Strategy path not available (using REST API)"
-                )
+                raise JesseIntegrationError(f"Strategy path not available (using REST API)")
 
             strategy_path = os.path.join(self.strategies_path, name, "__init__.py")
 
@@ -341,9 +337,7 @@ class JesseWrapper:
                 "has_hyperparameters": "def hyperparameters(" in code,
             }
 
-            logger.info(
-                f"Strategy validation: {'✅ Valid' if result['valid'] else '❌ Invalid'}"
-            )
+            logger.info(f"Strategy validation: {'✅ Valid' if result['valid'] else '❌ Invalid'}")
             return result
 
         except Exception as e:
@@ -419,9 +413,7 @@ class JesseWrapper:
             Dict with available date ranges
         """
         try:
-            logger.info(
-                f"Getting available candles (exchange={exchange}, symbol={symbol})"
-            )
+            logger.info(f"Getting available candles (exchange={exchange}, symbol={symbol})")
 
             # This would query the database for available data
             # For now, return a placeholder that indicates this needs database access
