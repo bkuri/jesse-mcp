@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  jesse:
+    image: salehmir/jesse:latest
+    container_name: jesse
+    network_mode: host
+    working_dir: /home/jesse
+    environment:
+      - TZ=America/Mexico_City
+    volumes:
+      - ./storage:/home/jesse/storage:Z
+      - ./strategies:/home/jesse/strategies:Z
+      - ./custom_indicators:/home/jesse/custom_indicators:Z
+      - ./.env:/home/jesse/.env:Z
+    restart: unless-stopped
+    command: jesse run
