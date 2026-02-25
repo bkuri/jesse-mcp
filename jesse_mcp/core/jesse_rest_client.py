@@ -300,6 +300,7 @@ class JesseRESTClient:
         fee: float = 0.001,
         leverage: float = 1,
         exchange_type: str = "futures",
+        data_timeframe: Optional[str] = None,
         hyperparameters: Optional[Dict[str, Any]] = None,
         include_trades: bool = False,
         include_equity_curve: bool = False,
@@ -311,7 +312,7 @@ class JesseRESTClient:
         Args:
             strategy: Strategy name
             symbol: Trading symbol
-            timeframe: Candle timeframe
+            timeframe: Trading candle timeframe
             start_date: Start date YYYY-MM-DD
             end_date: End date YYYY-MM-DD
             exchange: Exchange name
@@ -319,6 +320,7 @@ class JesseRESTClient:
             fee: Trading fee
             leverage: Leverage for futures
             exchange_type: 'spot' or 'futures'
+            data_timeframe: Optional data timeframe (if different from trading timeframe)
             hyperparameters: Strategy parameter overrides
             include_trades: Include individual trades
             include_equity_curve: Include equity curve data
@@ -327,6 +329,9 @@ class JesseRESTClient:
         Returns:
             Backtest results dict
         """
+        # Use same timeframe for data if not specified
+        if data_timeframe is None:
+            data_timeframe = timeframe
         try:
             logger.info(f"Starting backtest via REST API: {strategy} on {symbol}")
 
@@ -423,11 +428,17 @@ class JesseRESTClient:
             }
 
             # Jesse 1.13.x payload format - matches exactly what UI sends
+            # Add data route if different from trading timeframe (like UI)
+            if data_timeframe != timeframe:
+                data_routes = [{"symbol": symbol, "timeframe": data_timeframe}]
+            else:
+                data_routes = []
+
             payload = {
                 "id": str(uuid.uuid4()),
                 "exchange": exchange,
                 "routes": routes,
-                "data_routes": [],  # UI sends empty array when using routes for data
+                "data_routes": data_routes,
                 "config": config,
                 "start_date": start_date,
                 "finish_date": end_date,
