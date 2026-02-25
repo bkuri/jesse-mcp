@@ -4,15 +4,17 @@ Jesse REST API Client
 Provides a clean abstraction over Jesse's REST API running on server2
 allowing full interactivity with Jesse without requiring local module imports.
 
-Configuration (via MetaMCP MCP Servers panel):
-- JESSE_URL: URL to Jesse API (default: http://server2:8000)
-- JESSE_PASSWORD: Jesse UI login password (for /auth/login endpoint)
-- JESSE_API_TOKEN: Pre-generated API token from Jesse UI (alternative to password)
-  Choose one of JESSE_PASSWORD or JESSE_API_TOKEN
+Configuration (via MetaMCP MCP Servers panel or environment variables):
+- JESSE_URL: URL to Jesse API (default: http://server2:9100)
+- JESSE_PASSWORD: Jesse UI login password (recommended - will auto-login)
+- JESSE_API_TOKEN: Session token from /auth/login (alternative to password)
+  IMPORTANT: This is NOT the LICENSE_API_TOKEN from .env - it must be a session token!
+  To get a session token, call POST /auth/login with your password, or use JESSE_PASSWORD instead.
 """
 
 import os
 import re
+import json
 import requests
 import logging
 from typing import Dict, Any, Optional, List
@@ -290,9 +292,7 @@ class JesseRESTClient:
 
     def backtest(
         self,
-        strategy: str,
-        symbol: str,
-        timeframe: str,
+        routes: List[Dict[str, str]],
         start_date: str,
         end_date: str,
         exchange: str = "Binance",
@@ -300,7 +300,7 @@ class JesseRESTClient:
         fee: float = 0.001,
         leverage: float = 1,
         exchange_type: str = "futures",
-        data_timeframe: Optional[str] = None,
+        data_routes: Optional[List[Dict[str, str]]] = None,
         hyperparameters: Optional[Dict[str, Any]] = None,
         include_trades: bool = False,
         include_equity_curve: bool = False,
@@ -310,9 +310,7 @@ class JesseRESTClient:
         Run a backtest via Jesse REST API
 
         Args:
-            strategy: Strategy name
-            symbol: Trading symbol
-            timeframe: Trading candle timeframe
+            routes: List of trading routes [{"strategy": "StrategyName", "symbol": "BTC-USDT", "timeframe": "4h"}, ...]
             start_date: Start date YYYY-MM-DD
             end_date: End date YYYY-MM-DD
             exchange: Exchange name
@@ -320,7 +318,7 @@ class JesseRESTClient:
             fee: Trading fee
             leverage: Leverage for futures
             exchange_type: 'spot' or 'futures'
-            data_timeframe: Optional data timeframe (if different from trading timeframe)
+            data_routes: Optional list of data routes [{"symbol": "BTC-USDT", "timeframe": "1h"}, ...]
             hyperparameters: Strategy parameter overrides
             include_trades: Include individual trades
             include_equity_curve: Include equity curve data
@@ -328,23 +326,37 @@ class JesseRESTClient:
 
         Returns:
             Backtest results dict
+
+        Example:
+            routes = [
+                {"strategy": "SMACrossover", "symbol": "BTC-USDT", "timeframe": "4h"},
+                {"strategy": "RSI", "symbol": "ETH-USDT", "timeframe": "1h"},
+            ]
+            data_routes = [
+                {"symbol": "BTC-USDT", "timeframe": "1h"},  # extra data for larger timeframe
+            ]
         """
-        # Use same timeframe for data if not specified
-        if data_timeframe is None:
-            data_timeframe = timeframe
         try:
-            logger.info(f"Starting backtest via REST API: {strategy} on {symbol}")
+            logger.info(f"Starting backtest via REST API with {len(routes)} routes")
 
             import uuid
 
             # Format routes as UI sends - no "exchange" key, it's at top level
-            routes = [
+            formatted_routes = [
                 {
-                    "strategy": strategy,
-                    "symbol": symbol,
-                    "timeframe": timeframe,
+                    "strategy": r["strategy"],
+                    "symbol": r["symbol"],
+                    "timeframe": r["timeframe"],
                 }
+                for r in routes
             ]
+
+            # Format data routes if provided
+            formatted_data_routes = []
+            if data_routes:
+                formatted_data_routes = [
+                    {"symbol": dr["symbol"], "timeframe": dr["timeframe"]} for dr in data_routes
+                ]
 
             # Format config as Jesse 1.13.x expects - matches UI format exactly
             config = {
@@ -427,18 +439,15 @@ class JesseRESTClient:
                 },
             }
 
-            # Jesse 1.13.x payload format - matches exactly what UI sends
-            # Add data route if different from trading timeframe (like UI)
-            if data_timeframe != timeframe:
-                data_routes = [{"symbol": symbol, "timeframe": data_timeframe}]
-            else:
-                data_routes = []
+            # Map exchange name to Jesse's format
+            exchange_name = self._map_exchange_name(exchange, exchange_type)
 
+            # Jesse 1.13.x payload format - matches exactly what UI sends
             payload = {
                 "id": str(uuid.uuid4()),
-                "exchange": exchange,
-                "routes": routes,
-                "data_routes": data_routes,
+                "exchange": exchange_name,
+                "routes": formatted_routes,
+                "data_routes": formatted_data_routes,
                 "config": config,
                 "start_date": start_date,
                 "finish_date": end_date,
@@ -463,7 +472,7 @@ class JesseRESTClient:
                     "raw_result": result,
                 }
 
-            logger.info(f"✅ Backtest completed for {strategy}")
+            logger.info(f"✅ Backtest completed for {len(routes)} routes")
             return result
 
         except Exception as e:
@@ -472,9 +481,7 @@ class JesseRESTClient:
 
     def cached_backtest(
         self,
-        strategy: str,
-        symbol: str,
-        timeframe: str,
+        routes: List[Dict[str, str]],
         start_date: str,
         end_date: str,
         exchange: str = "Binance",
@@ -482,7 +489,11 @@ class JesseRESTClient:
         fee: float = 0.001,
         leverage: float = 1,
         exchange_type: str = "futures",
+        data_routes: Optional[List[Dict[str, str]]] = None,
         hyperparameters: Optional[Dict[str, Any]] = None,
+        include_trades: bool = False,
+        include_equity_curve: bool = False,
+        include_logs: bool = False,
     ) -> Dict[str, Any]:
         """
         Run a backtest with caching support (1 hour TTL by default).
@@ -491,16 +502,26 @@ class JesseRESTClient:
         cached results if within TTL.
 
         Args:
-            Same as backtest()
+            routes: List of trading routes [{"strategy": "StrategyName", "symbol": "BTC-USDT", "timeframe": "4h"}, ...]
+            start_date: Start date YYYY-MM-DD
+            end_date: End date YYYY-MM-DD
+            exchange: Exchange name
+            starting_balance: Initial capital
+            fee: Trading fee
+            leverage: Leverage for futures
+            exchange_type: 'spot' or 'futures'
+            data_routes: Optional list of data routes [{"symbol": "BTC-USDT", "timeframe": "1h"}, ...]
+            hyperparameters: Strategy parameter overrides
+            include_trades: Include individual trades
+            include_equity_curve: Include equity curve data
+            include_logs: Include strategy logs
 
         Returns:
             Backtest results dict (cached or fresh)
         """
         if not JESSE_CACHE_ENABLED:
             return self.backtest(
-                strategy=strategy,
-                symbol=symbol,
-                timeframe=timeframe,
+                routes=routes,
                 start_date=start_date,
                 end_date=end_date,
                 exchange=exchange,
@@ -508,14 +529,17 @@ class JesseRESTClient:
                 fee=fee,
                 leverage=leverage,
                 exchange_type=exchange_type,
+                data_routes=data_routes,
                 hyperparameters=hyperparameters,
+                include_trades=include_trades,
+                include_equity_curve=include_equity_curve,
+                include_logs=include_logs,
             )
 
         cache = get_backtest_cache()
+        route_key = json.dumps(routes, sort_keys=True)
         cache_key = cache._hash_key(
-            strategy,
-            symbol,
-            timeframe,
+            route_key,
             start_date,
             end_date,
             exchange,
@@ -523,18 +547,17 @@ class JesseRESTClient:
             fee,
             leverage,
             exchange_type,
-            tuple(sorted((hyperparameters or {}).items())),
+            json.dumps(data_routes or [], sort_keys=True) if data_routes else "",
+            json.dumps(hyperparameters or {}, sort_keys=True) if hyperparameters else "",
         )
 
         cached = cache.get(cache_key)
         if cached is not None:
-            logger.info(f"✅ Cache hit for backtest: {strategy} on {symbol}")
+            logger.info(f"✅ Cache hit for backtest with {len(routes)} routes")
             return cached
 
         result = self.backtest(
-            strategy=strategy,
-            symbol=symbol,
-            timeframe=timeframe,
+            routes=routes,
             start_date=start_date,
             end_date=end_date,
             exchange=exchange,
@@ -542,20 +565,22 @@ class JesseRESTClient:
             fee=fee,
             leverage=leverage,
             exchange_type=exchange_type,
+            data_routes=data_routes,
             hyperparameters=hyperparameters,
+            include_trades=include_trades,
+            include_equity_curve=include_equity_curve,
+            include_logs=include_logs,
         )
 
         if "error" not in result:
             cache.set(cache_key, result)
-            logger.debug(f"Cached backtest result for: {strategy} on {symbol}")
+            logger.debug(f"Cached backtest result for {len(routes)} routes")
 
         return result
 
     def backtest_with_retry(
         self,
-        strategy: str,
-        symbol: str,
-        timeframe: str,
+        routes: List[Dict[str, str]],
         start_date: str,
         end_date: str,
         exchange: str = "Binance",
@@ -563,6 +588,7 @@ class JesseRESTClient:
         fee: float = 0.001,
         leverage: float = 1,
         exchange_type: str = "futures",
+        data_routes: Optional[List[Dict[str, str]]] = None,
         hyperparameters: Optional[Dict[str, Any]] = None,
         max_retries: int = 3,
         initial_delay: float = 1.0,
@@ -573,9 +599,7 @@ class JesseRESTClient:
         Implements exponential backoff retry strategy for handling temporary failures.
 
         Args:
-            strategy: Strategy name
-            symbol: Trading symbol
-            timeframe: Candle timeframe
+            routes: List of trading routes [{"strategy": "StrategyName", "symbol": "BTC-USDT", "timeframe": "4h"}, ...]
             start_date: Start date YYYY-MM-DD
             end_date: End date YYYY-MM-DD
             exchange: Exchange name
@@ -583,6 +607,7 @@ class JesseRESTClient:
             fee: Trading fee
             leverage: Leverage for futures
             exchange_type: 'spot' or 'futures'
+            data_routes: Optional list of data routes [{"symbol": "BTC-USDT", "timeframe": "1h"}, ...]
             hyperparameters: Strategy parameter overrides
             max_retries: Maximum number of retry attempts (default: 3)
             initial_delay: Initial delay in seconds for exponential backoff (default: 1.0)
@@ -596,12 +621,10 @@ class JesseRESTClient:
 
         for attempt in range(max_retries):
             try:
-                logger.info(f"Backtest attempt {attempt + 1}/{max_retries}: {strategy} on {symbol}")
+                logger.info(f"Backtest attempt {attempt + 1}/{max_retries}: {len(routes)} routes")
 
                 result = self.backtest(
-                    strategy=strategy,
-                    symbol=symbol,
-                    timeframe=timeframe,
+                    routes=routes,
                     start_date=start_date,
                     end_date=end_date,
                     exchange=exchange,
@@ -609,6 +632,7 @@ class JesseRESTClient:
                     fee=fee,
                     leverage=leverage,
                     exchange_type=exchange_type,
+                    data_routes=data_routes,
                     hyperparameters=hyperparameters,
                 )
 
@@ -978,16 +1002,7 @@ class JesseRESTClient:
             status = session.get("status")
             metrics = session.get("metrics", {})
 
-            # Check if backtest completed - even if metrics are empty
-            if status == "finished":
-                logger.info(f"✅ Backtest {backtest_id} completed successfully")
-                return {
-                    "id": backtest_id,
-                    "status": "finished",
-                    "session": session,
-                    "success": True,
-                }
-
+            # Check for empty metrics
             if not metrics:
                 logger.warning(f"Empty metrics in backtest result")
                 return {"error": "Empty metrics in result", "success": False, "session": session}
@@ -995,7 +1010,7 @@ class JesseRESTClient:
             # Convert to standard format
             result = {
                 "id": backtest_id,
-                "status": session.get("status"),
+                "status": status,
                 "total_return": metrics.get("net_profit_percentage"),
                 "sharpe_ratio": metrics.get("sharpe_ratio"),
                 "max_drawdown": metrics.get("max_drawdown"),
@@ -1023,7 +1038,7 @@ class JesseRESTClient:
             }
 
             logger.info(
-                f"✅ Retrieved backtest result: return={result['total_return']:.2f}%, sharpe={result['sharpe_ratio']:.2f}"
+                f"✅ Retrieved backtest result: return={result['total_return']:.2f}%, sharpe={result.get('sharpe_ratio', 'N/A')}"
             )
             return result
 
@@ -1081,7 +1096,7 @@ class JesseRESTClient:
 
         # Check for NaN or invalid numeric values in present fields
         for field in metric_fields:
-            if field in result:
+            if field in result and result[field] is not None:
                 try:
                     value = float(result[field])
                     if value != value:  # NaN check
@@ -1090,6 +1105,57 @@ class JesseRESTClient:
                     return False, f"Field {field} is not numeric: {result[field]}"
 
         return True, "Result validation passed"
+
+    def _map_exchange_name(self, exchange: str, exchange_type: str = "futures") -> str:
+        """
+        Map exchange name to Jesse's full exchange name format.
+
+        Args:
+            exchange: Short exchange name (e.g., "Binance", "Bybit")
+            exchange_type: 'spot' or 'futures'
+
+        Returns:
+            Full exchange name (e.g., "Binance Spot", "Binance Perpetual Futures")
+        """
+        exchange_map = {
+            "Binance": {
+                "spot": "Binance Spot",
+                "futures": "Binance Perpetual Futures",
+            },
+            "Bybit": {
+                "spot": "Bybit Spot",
+                "futures": "Bybit USDT Perpetual",
+            },
+            "OKX": {
+                "spot": "OKX Spot",
+                "futures": "OKX USDT Perpetual",
+            },
+            "Coinbase": {
+                "spot": "Coinbase Spot",
+                "futures": "Coinbase Futures",
+            },
+            "Gate": {
+                "spot": "Gate Spot",
+                "futures": "Gate USDT Perpetual",
+            },
+            "Bitfinex": {
+                "spot": "Bitfinex Spot",
+                "futures": "Bitfinex Futures",
+            },
+            "Hyperliquid": {
+                "spot": "Hyperliquid",
+                "futures": "Hyperliquid",
+            },
+            "Apex": {
+                "spot": "Apex Spot",
+                "futures": "Apex Futures",
+            },
+        }
+
+        if exchange in exchange_map:
+            return exchange_map[exchange].get(exchange_type, exchange_map[exchange]["futures"])
+
+        return exchange
 
     def optimization(
         self,

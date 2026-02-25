@@ -350,9 +350,7 @@ class TestBacktest:
             mock_limiter.return_value = Mock(acquire=Mock(return_value=True))
 
             result = client.backtest(
-                strategy="TestStrategy",
-                symbol="BTC-USDT",
-                timeframe="1h",
+                routes=[{"strategy": "TestStrategy", "symbol": "BTC-USDT", "timeframe": "1h"}],
                 start_date="2023-01-01",
                 end_date="2023-12-31",
             )
@@ -377,9 +375,7 @@ class TestBacktest:
             mock_limiter.return_value = Mock(acquire=Mock(return_value=True))
 
             result = client.backtest(
-                strategy="TestStrategy",
-                symbol="ETH-USDT",
-                timeframe="4h",
+                routes=[{"strategy": "TestStrategy", "symbol": "ETH-USDT", "timeframe": "4h"}],
                 start_date="2023-01-01",
                 end_date="2023-12-31",
                 exchange="Bybit",
@@ -392,8 +388,10 @@ class TestBacktest:
             call_args = client.session.post.call_args
             payload = call_args[1]["json"]
 
-            assert payload["exchange"] == "Bybit"
-            assert payload["config"]["starting_balance"] == 50000
+            assert payload["exchange"] == "Bybit USDT Perpetual"
+            # Check starting_balance in the exchanges config
+            bybit_config = payload["config"]["exchanges"].get("Bybit USDT Perpetual", {})
+            assert bybit_config.get("balance") == 50000
             assert payload["routes"][0]["symbol"] == "ETH-USDT"
 
     def test_backtest_rate_limited(self):
@@ -408,9 +406,7 @@ class TestBacktest:
             mock_limiter.return_value = Mock(acquire=Mock(return_value=False))
 
             result = client.backtest(
-                strategy="TestStrategy",
-                symbol="BTC-USDT",
-                timeframe="1h",
+                routes=[{"strategy": "TestStrategy", "symbol": "BTC-USDT", "timeframe": "1h"}],
                 start_date="2023-01-01",
                 end_date="2023-12-31",
             )
@@ -431,9 +427,7 @@ class TestBacktest:
             mock_limiter.return_value = Mock(acquire=Mock(return_value=True))
 
             result = client.backtest(
-                strategy="TestStrategy",
-                symbol="BTC-USDT",
-                timeframe="1h",
+                routes=[{"strategy": "TestStrategy", "symbol": "BTC-USDT", "timeframe": "1h"}],
                 start_date="2023-01-01",
                 end_date="2023-12-31",
             )
@@ -767,9 +761,7 @@ class TestCachedBacktest:
                 mock_limiter.return_value = Mock(acquire=Mock(return_value=True))
 
                 result = client.cached_backtest(
-                    strategy="TestStrategy",
-                    symbol="BTC-USDT",
-                    timeframe="1h",
+                    routes=[{"strategy": "TestStrategy", "symbol": "BTC-USDT", "timeframe": "1h"}],
                     start_date="2023-01-01",
                     end_date="2023-12-31",
                 )
@@ -793,9 +785,7 @@ class TestCachedBacktest:
                 return_value=mock_cache,
             ):
                 result = client.cached_backtest(
-                    strategy="TestStrategy",
-                    symbol="BTC-USDT",
-                    timeframe="1h",
+                    routes=[{"strategy": "TestStrategy", "symbol": "BTC-USDT", "timeframe": "1h"}],
                     start_date="2023-01-01",
                     end_date="2023-12-31",
                 )
@@ -955,9 +945,7 @@ class TestBacktestWithRetry:
 
         with patch.object(client, "backtest", return_value=successful_result):
             result = client.backtest_with_retry(
-                strategy="TestStrategy",
-                symbol="BTC-USDT",
-                timeframe="1h",
+                routes=[{"strategy": "TestStrategy", "symbol": "BTC-USDT", "timeframe": "1h"}],
                 start_date="2023-01-01",
                 end_date="2023-12-31",
             )
@@ -985,9 +973,7 @@ class TestBacktestWithRetry:
             ],
         ):
             result = client.backtest_with_retry(
-                strategy="TestStrategy",
-                symbol="BTC-USDT",
-                timeframe="1h",
+                routes=[{"strategy": "TestStrategy", "symbol": "BTC-USDT", "timeframe": "1h"}],
                 start_date="2023-01-01",
                 end_date="2023-12-31",
                 max_retries=3,
@@ -1009,9 +995,7 @@ class TestBacktestWithRetry:
             return_value={"error": "Service unavailable"},
         ):
             result = client.backtest_with_retry(
-                strategy="TestStrategy",
-                symbol="BTC-USDT",
-                timeframe="1h",
+                routes=[{"strategy": "TestStrategy", "symbol": "BTC-USDT", "timeframe": "1h"}],
                 start_date="2023-01-01",
                 end_date="2023-12-31",
                 max_retries=2,
