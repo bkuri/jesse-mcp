@@ -9,10 +9,9 @@ Provides 18 tools for quantitative trading analysis:
 - Phase 5: Pairs Trading (5 tools) [formerly phase5]
 """
 
-import asyncio
 import logging
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional
 
 from fastmcp import FastMCP
 from starlette.requests import Request
@@ -26,11 +25,11 @@ logger = logging.getLogger("jesse-mcp")
 # These will be initialized when main() is called, not at import time
 # This allows the server module to be imported for testing without Jesse
 
-jesse = None
-optimizer = None
-risk_analyzer = None
-pairs_analyzer = None
-_initialized = False
+jesse: Optional[Any] = None
+optimizer: Optional[Any] = None
+risk_analyzer: Optional[Any] = None
+pairs_analyzer: Optional[Any] = None
+_initialized: bool = False
 
 
 def _initialize_dependencies():
@@ -114,7 +113,7 @@ async def health_endpoint(request: Request) -> JSONResponse:
 
 
 @mcp.tool
-def jesse_status() -> dict:
+def jesse_status() -> Dict[str, Any]:
     """
     Check Jesse REST API health and connection status.
 
@@ -138,6 +137,46 @@ def jesse_status() -> dict:
 
 
 @mcp.tool
+def get_exchanges() -> Dict[str, Any]:
+    """
+    Get list of supported exchanges in Jesse.
+
+    Returns a list of exchange names that Jesse supports for trading and backtesting.
+    Use this to validate exchange names before creating trading workflows or backtests.
+
+    Returns:
+        Dict with 'exchanges' list of supported exchange names and 'exchange_configs' with details
+    """
+    try:
+        from jesse_mcp.core.rest.config import list_supported_exchanges, EXCHANGE_CONFIG
+
+        exchanges = list_supported_exchanges()
+
+        # Build detailed exchange info including spot/futures support
+        exchange_details = []
+        for exchange in exchanges:
+            config = EXCHANGE_CONFIG.get(exchange, {})
+            exchange_details.append(
+                {
+                    "name": exchange,
+                    "supports_spot": config.get("supports_spot", False),
+                    "supports_futures": config.get("supports_futures", False),
+                    "symbol_format": config.get("symbol_format", "UNKNOWN"),
+                    "timeframes": config.get("timeframes", []),
+                }
+            )
+
+        return {
+            "exchanges": sorted(exchanges),
+            "exchange_details": exchange_details,
+            "count": len(exchanges),
+        }
+    except Exception as e:
+        logger.error(f"Failed to get exchanges: {e}")
+        return {"error": str(e), "exchanges": []}
+
+
+@mcp.tool
 def backtest(
     strategy: str,
     symbol: str,
@@ -149,11 +188,11 @@ def backtest(
     fee: float = 0.001,
     leverage: float = 1,
     exchange_type: str = "futures",
-    hyperparameters: Optional[dict] = None,
+    hyperparameters: Optional[Dict[str, Any]] = None,
     include_trades: bool = False,
     include_equity_curve: bool = False,
     include_logs: bool = False,
-) -> dict:
+) -> Dict[str, Any]:
     """
     Run a single backtest on a strategy with specified parameters.
 
@@ -174,10 +213,12 @@ def backtest(
         from jesse_mcp.core.jesse_rest_client import get_jesse_rest_client
 
         client = get_jesse_rest_client()
+        if client is None:
+            raise RuntimeError("Jesse REST client not available")
+
+        routes = [{"strategy": strategy, "symbol": symbol, "timeframe": timeframe}]
         result = client.backtest(
-            strategy=strategy,
-            symbol=symbol,
-            timeframe=timeframe,
+            routes=routes,
             start_date=start_date,
             end_date=end_date,
             exchange=exchange,
@@ -242,7 +283,7 @@ def backtest(
 
 
 @mcp.tool
-def strategy_list(include_test_strategies: bool = False) -> dict:
+def strategy_list(include_test_strategies: bool = False) -> Dict[str, Any]:
     """
     List all available trading strategies.
 
@@ -250,6 +291,8 @@ def strategy_list(include_test_strategies: bool = False) -> dict:
     Returns list of strategy names that can be passed to backtest(), analyze_results(), etc.
     """
     try:
+        if jesse is None:
+            raise RuntimeError("Jesse framework not initialized")
         return jesse.list_strategies(include_test_strategies)
     except Exception as e:
         logger.error(f"Strategy list failed: {e}")
@@ -257,9 +300,11 @@ def strategy_list(include_test_strategies: bool = False) -> dict:
 
 
 @mcp.tool
-def strategy_read(name: str) -> dict:
+def strategy_read(name: str) -> Dict[str, Any]:
     """Read strategy source code"""
     try:
+        if jesse is None:
+            raise RuntimeError("Jesse framework not initialized")
         return jesse.read_strategy(name)
     except Exception as e:
         logger.error(f"Strategy read failed: {e}")
@@ -267,9 +312,11 @@ def strategy_read(name: str) -> dict:
 
 
 @mcp.tool
-def strategy_validate(code: str) -> dict:
+def strategy_validate(code: str) -> Dict[str, Any]:
     """Validate strategy code without saving"""
     try:
+        if jesse is None:
+            raise RuntimeError("Jesse framework not initialized")
         return jesse.validate_strategy(code)
     except Exception as e:
         logger.error(f"Strategy validation failed: {e}")
@@ -282,7 +329,7 @@ def candles_import(
     symbol: str,
     start_date: str,
     end_date: Optional[str] = None,
-) -> dict:
+) -> Dict[str, Any]:
     """Download candle data from exchange via Jesse REST API"""
     try:
         from jesse_mcp.core.jesse_rest_client import get_jesse_rest_client
@@ -300,7 +347,7 @@ def candles_import(
 
 
 @mcp.tool
-def rate_limit_status() -> dict:
+def rate_limit_status() -> Dict[str, Any]:
     """
     Get current rate limiter status for Jesse API calls.
 
@@ -332,7 +379,7 @@ async def optimize(
     timeframe: str,
     start_date: str,
     end_date: str,
-    param_space: dict,
+    param_space: Dict[str, Any],
     metric: str = "total_return",
     n_trials: int = 100,
     n_jobs: int = 1,
@@ -341,7 +388,7 @@ async def optimize(
     fee: float = 0.001,
     leverage: float = 1,
     exchange_type: str = "futures",
-) -> dict:
+) -> Dict[str, Any]:
     """
     Auto-optimize strategy hyperparameters using Bayesian optimization.
 
@@ -386,11 +433,13 @@ async def walk_forward(
     in_sample_period: int = 365,
     out_sample_period: int = 30,
     step_forward: int = 7,
-    param_space: Optional[dict] = None,
+    param_space: Optional[Dict[str, Any]] = None,
     metric: str = "total_return",
-) -> dict:
+) -> Dict[str, Any]:
     """Perform walk-forward analysis to detect overfitting"""
     try:
+        if optimizer is None:
+            raise RuntimeError("Optimizer module not initialized")
         result = await optimizer.walk_forward(
             strategy=strategy,
             symbol=symbol,
@@ -412,15 +461,17 @@ async def walk_forward(
 @mcp.tool
 async def backtest_batch(
     strategy: str,
-    symbols: list,
-    timeframes: list,
+    symbols: List[str],
+    timeframes: List[str],
     start_date: str,
     end_date: str,
-    hyperparameters: Optional[list] = None,
+    hyperparameters: Optional[List[Dict[str, Any]]] = None,
     concurrent_limit: int = 4,
-) -> dict:
+) -> Dict[str, Any]:
     """Run multiple backtests concurrently for strategy comparison"""
     try:
+        if optimizer is None:
+            raise RuntimeError("Optimizer module not initialized")
         result = await optimizer.backtest_batch(
             strategy=strategy,
             symbols=symbols,
@@ -438,12 +489,12 @@ async def backtest_batch(
 
 @mcp.tool
 def analyze_results(
-    backtest_result: dict,
+    backtest_result: Dict[str, Any],
     analysis_type: str = "basic",
     include_trade_analysis: bool = True,
     include_correlation: bool = False,
     include_monte_carlo: bool = False,
-) -> dict:
+) -> Dict[str, Any]:
     """
     Extract deep insights from backtest results.
 
@@ -460,6 +511,8 @@ def analyze_results(
     4. risk_report() -> comprehensive assessment
     """
     try:
+        if optimizer is None:
+            raise RuntimeError("Optimizer module not initialized")
         result = optimizer.analyze_results(
             backtest_result=backtest_result,
             analysis_type=analysis_type,
@@ -478,16 +531,18 @@ def analyze_results(
 
 @mcp.tool
 async def monte_carlo(
-    backtest_result: dict,
+    backtest_result: Dict[str, Any],
     simulations: int = 10000,
-    confidence_levels: Optional[list] = None,
+    confidence_levels: Optional[List[float]] = None,
     resample_method: str = "bootstrap",
     block_size: int = 20,
     include_drawdowns: bool = True,
     include_returns: bool = True,
-) -> dict:
+) -> Dict[str, Any]:
     """Generate Monte Carlo simulations for comprehensive risk analysis"""
     try:
+        if risk_analyzer is None:
+            raise RuntimeError("Risk analyzer module not initialized")
         result = await risk_analyzer.monte_carlo(
             backtest_result=backtest_result,
             simulations=simulations,
@@ -505,14 +560,16 @@ async def monte_carlo(
 
 @mcp.tool
 async def var_calculation(
-    backtest_result: dict,
-    confidence_levels: Optional[list] = None,
-    time_horizons: Optional[list] = None,
+    backtest_result: Dict[str, Any],
+    confidence_levels: Optional[List[float]] = None,
+    time_horizons: Optional[List[int]] = None,
     method: str = "all",
     monte_carlo_sims: int = 10000,
-) -> dict:
+) -> Dict[str, Any]:
     """Calculate Value at Risk using multiple methods"""
     try:
+        if risk_analyzer is None:
+            raise RuntimeError("Risk analyzer module not initialized")
         result = await risk_analyzer.var_calculation(
             backtest_result=backtest_result,
             confidence_levels=confidence_levels or [],
@@ -528,12 +585,14 @@ async def var_calculation(
 
 @mcp.tool
 async def stress_test(
-    backtest_result: dict,
-    scenarios: Optional[list] = None,
+    backtest_result: Dict[str, Any],
+    scenarios: Optional[List[str]] = None,
     include_custom_scenarios: bool = False,
-) -> dict:
+) -> Dict[str, Any]:
     """Test strategy performance under extreme market scenarios"""
     try:
+        if risk_analyzer is None:
+            raise RuntimeError("Risk analyzer module not initialized")
         result = await risk_analyzer.stress_test(
             backtest_result=backtest_result,
             scenarios=scenarios,
@@ -547,15 +606,17 @@ async def stress_test(
 
 @mcp.tool
 async def risk_report(
-    backtest_result: dict,
+    backtest_result: Dict[str, Any],
     include_monte_carlo: bool = True,
     include_var_analysis: bool = True,
     include_stress_test: bool = True,
     monte_carlo_sims: int = 5000,
     report_format: str = "summary",
-) -> dict:
+) -> Dict[str, Any]:
     """Generate comprehensive risk assessment and recommendations"""
     try:
+        if risk_analyzer is None:
+            raise RuntimeError("Risk analyzer module not initialized")
         result = await risk_analyzer.risk_report(
             backtest_result=backtest_result,
             include_monte_carlo=include_monte_carlo,
@@ -575,15 +636,17 @@ async def risk_report(
 
 @mcp.tool
 async def correlation_matrix(
-    backtest_results: list,
+    backtest_results: List[Dict[str, Any]],
     lookback_period: int = 60,
     correlation_threshold: float = 0.7,
     include_rolling: bool = True,
     rolling_window: int = 20,
     include_heatmap: bool = False,
-) -> dict:
+) -> Dict[str, Any]:
     """Analyze cross-asset correlations and identify pairs trading opportunities"""
     try:
+        if pairs_analyzer is None:
+            raise RuntimeError("Pairs analyzer module not initialized")
         result = await pairs_analyzer.correlation_matrix(
             backtest_results=backtest_results,
             lookback_period=lookback_period,
@@ -600,18 +663,20 @@ async def correlation_matrix(
 
 @mcp.tool
 async def pairs_backtest(
-    pair: dict,
-    backtest_result_1: dict,
-    backtest_result_2: dict,
+    pair: Dict[str, Any],
+    backtest_result_1: Dict[str, Any],
+    backtest_result_2: Dict[str, Any],
     strategy: str = "mean_reversion",
     lookback_period: int = 60,
     entry_threshold: float = 2.0,
     exit_threshold: float = 0.5,
     position_size: float = 0.02,
     max_holding_days: int = 20,
-) -> dict:
+) -> Dict[str, Any]:
     """Backtest pairs trading strategies"""
     try:
+        if pairs_analyzer is None:
+            raise RuntimeError("Pairs analyzer module not initialized")
         result = await pairs_analyzer.pairs_backtest(
             pair=pair,
             strategy=strategy,
@@ -631,19 +696,21 @@ async def pairs_backtest(
 
 @mcp.tool
 async def factor_analysis(
-    backtest_result: dict,
-    factors: Optional[list] = None,
-    factor_returns: Optional[dict] = None,
+    backtest_result: Dict[str, Any],
+    factors: Optional[List[str]] = None,
+    factor_returns: Optional[Dict[str, List[float]]] = None,
     include_residuals: bool = True,
     analysis_period: int = 252,
     confidence_level: float = 0.95,
-) -> dict:
+) -> Dict[str, Any]:
     """Decompose returns into systematic factors"""
     try:
+        if pairs_analyzer is None:
+            raise RuntimeError("Pairs analyzer module not initialized")
         result = await pairs_analyzer.factor_analysis(
             backtest_result=backtest_result,
-            factors=factors,
-            factor_returns=factor_returns,
+            factors=factors or [],
+            factor_returns=factor_returns or {},
             include_residuals=include_residuals,
             analysis_period=analysis_period,
             confidence_level=confidence_level,
@@ -656,15 +723,17 @@ async def factor_analysis(
 
 @mcp.tool
 async def regime_detector(
-    backtest_results: list,
+    backtest_results: List[Dict[str, Any]],
     lookback_period: int = 60,
     detection_method: str = "hmm",
     n_regimes: int = 3,
     include_transitions: bool = True,
     include_forecast: bool = True,
-) -> dict:
+) -> Dict[str, Any]:
     """Identify market regimes and transitions"""
     try:
+        if pairs_analyzer is None:
+            raise RuntimeError("Pairs analyzer module not initialized")
         result = await pairs_analyzer.regime_detector(
             backtest_results=backtest_results,
             lookback_period=lookback_period,
@@ -683,7 +752,7 @@ async def regime_detector(
 
 
 @mcp.tool
-def cache_stats() -> dict:
+def cache_stats() -> Dict[str, Any]:
     """
     Get cache statistics including hit/miss ratio and cache sizes.
 
@@ -700,7 +769,7 @@ def cache_stats() -> dict:
 
 
 @mcp.tool
-def cache_clear(cache_name: Optional[str] = None) -> dict:
+def cache_clear(cache_name: Optional[str] = None) -> Dict[str, Any]:
     """
     Clear cache(s) to free memory or force fresh data.
 
@@ -730,7 +799,7 @@ def backtest_benchmark(
     timeframe: str = "1h",
     days: int = 30,
     exchange: str = "Binance Spot",
-) -> dict:
+) -> Dict[str, Any]:
     """
     Run a benchmark backtest to measure performance metrics.
 
@@ -747,7 +816,6 @@ def backtest_benchmark(
         Dict with benchmark results including execution time and candles/second
     """
     import time
-    from datetime import datetime, timedelta
     from jesse_mcp.core.jesse_rest_client import get_jesse_rest_client
 
     try:
@@ -776,10 +844,9 @@ def backtest_benchmark(
 
         # Run backtest with timing
         start_time = time.time()
+        routes = [{"strategy": "SMACrossover", "symbol": symbol, "timeframe": timeframe}]
         result = client.backtest(
-            strategy="SMACrossover",
-            symbol=symbol,
-            timeframe=timeframe,
+            routes=routes,
             start_date=start_date.strftime("%Y-%m-%d"),
             end_date=end_date.strftime("%Y-%m-%d"),
             exchange=exchange,
@@ -836,7 +903,7 @@ def backtest_benchmark(
 
 
 @mcp.tool
-def live_check_plugin() -> dict:
+def live_check_plugin() -> Dict[str, Any]:
     """
     Check if jesse-live plugin is installed and available.
 
@@ -862,7 +929,7 @@ def live_start_paper_trading(
     exchange_api_key_id: str,
     notification_api_key_id: str = "",
     debug_mode: bool = False,
-) -> dict:
+) -> Dict[str, Any]:
     """
     Start a PAPER trading session (simulated, no real money).
 
@@ -916,7 +983,7 @@ def live_start_live_trading(
     notification_api_key_id: str = "",
     debug_mode: bool = False,
     permission: str = "confirm_required",
-) -> dict:
+) -> Dict[str, Any]:
     """
     Start LIVE trading with REAL MONEY.
 
@@ -1008,7 +1075,7 @@ def live_start_live_trading(
 
 
 @mcp.tool
-def live_cancel_session(session_id: str, paper_mode: bool = True) -> dict:
+def live_cancel_session(session_id: str, paper_mode: bool = True) -> Dict[str, Any]:
     """
     Cancel a running live/paper trading session.
 
@@ -1030,7 +1097,7 @@ def live_cancel_session(session_id: str, paper_mode: bool = True) -> dict:
 
 
 @mcp.tool
-def live_get_sessions(limit: int = 50, offset: int = 0) -> dict:
+def live_get_sessions(limit: int = 50, offset: int = 0) -> Dict[str, Any]:
     """
     Get list of live trading sessions.
 
@@ -1052,7 +1119,7 @@ def live_get_sessions(limit: int = 50, offset: int = 0) -> dict:
 
 
 @mcp.tool
-def live_get_status(session_id: str) -> dict:
+def live_get_status(session_id: str) -> Dict[str, Any]:
     """
     Get status of a specific live trading session.
 
@@ -1073,7 +1140,7 @@ def live_get_status(session_id: str) -> dict:
 
 
 @mcp.tool
-def live_get_orders(session_id: str) -> dict:
+def live_get_orders(session_id: str) -> Dict[str, Any]:
     """
     Get orders from a live trading session.
 
@@ -1098,7 +1165,7 @@ def live_get_equity_curve(
     session_id: str,
     from_ms: Optional[int] = None,
     to_ms: Optional[int] = None,
-) -> dict:
+) -> Dict[str, Any]:
     """
     Get real-time equity curve (P&L) for a session.
 
@@ -1121,7 +1188,7 @@ def live_get_equity_curve(
 
 
 @mcp.tool
-def live_get_logs(session_id: str, log_type: str = "all") -> dict:
+def live_get_logs(session_id: str, log_type: str = "all") -> Dict[str, Any]:
     """
     Get logs from a live trading session.
 
@@ -1156,7 +1223,7 @@ def paper_start(
     leverage: float = 1,
     fee: float = 0.001,
     session_id: Optional[str] = None,
-) -> dict:
+) -> Dict[str, Any]:
     """
     Start a paper trading session.
 
@@ -1211,7 +1278,7 @@ def paper_start(
 
 
 @mcp.tool
-def paper_stop(session_id: str) -> dict:
+def paper_stop(session_id: str) -> Dict[str, Any]:
     """
     Stop a paper trading session and return final metrics.
 
@@ -1223,7 +1290,6 @@ def paper_stop(session_id: str) -> dict:
     """
     try:
         from jesse_mcp.core.jesse_rest_client import get_jesse_rest_client
-        from datetime import datetime
 
         client = get_jesse_rest_client()
 
@@ -1241,7 +1307,7 @@ def paper_stop(session_id: str) -> dict:
 
 
 @mcp.tool
-def paper_status(session_id: str) -> dict:
+def paper_status(session_id: str) -> Dict[str, Any]:
     """
     Get current status of a paper trading session.
 
@@ -1262,7 +1328,7 @@ def paper_status(session_id: str) -> dict:
 
 
 @mcp.tool
-def paper_get_trades(session_id: str, limit: int = 100, offset: int = 0) -> dict:
+def paper_get_trades(session_id: str, limit: int = 100, offset: int = 0) -> Dict[str, Any]:
     """
     Get trades executed in a paper trading session.
 
@@ -1295,7 +1361,7 @@ def paper_get_trades(session_id: str, limit: int = 100, offset: int = 0) -> dict
 
 
 @mcp.tool
-def paper_get_equity(session_id: str, resolution: str = "1h") -> dict:
+def paper_get_equity(session_id: str, resolution: str = "1h") -> Dict[str, Any]:
     """
     Get equity curve data for a paper trading session.
 
@@ -1338,7 +1404,7 @@ def paper_get_equity(session_id: str, resolution: str = "1h") -> dict:
 
 
 @mcp.tool
-def paper_get_metrics(session_id: str) -> dict:
+def paper_get_metrics(session_id: str) -> Dict[str, Any]:
     """
     Get calculated performance metrics for a paper trading session.
 
@@ -1367,7 +1433,7 @@ def paper_get_metrics(session_id: str) -> dict:
 
 
 @mcp.tool
-def paper_list_sessions() -> dict:
+def paper_list_sessions() -> Dict[str, Any]:
     """
     List all paper trading sessions.
 
@@ -1385,7 +1451,7 @@ def paper_list_sessions() -> dict:
 
 
 @mcp.tool
-def paper_update_session(session_id: str, notes: Optional[str] = None) -> dict:
+def paper_update_session(session_id: str, notes: Optional[str] = None) -> Dict[str, Any]:
     """
     Update session parameters (limited to safe modifications).
 

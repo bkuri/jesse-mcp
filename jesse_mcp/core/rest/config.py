@@ -2,142 +2,153 @@
 Exchange configuration for Jesse REST API client.
 
 Contains symbol patterns, timeframes, and other exchange-specific settings.
+
+NOTE: This config is derived from Jesse's official documentation:
+https://github.com/jesse-ai/jesse-docs/blob/main/docs/docs/supported-exchanges/index.md
+
+The authoritative list is maintained in the Jesse docs. This local copy exists
+because Jesse's REST API does not expose an /exchanges endpoint.
+
+TODO: Request Jesse REST API to expose /exchanges endpoint so we can query
+the authoritative list at runtime instead of maintaining a local copy.
+
+Last synced: 2025-02-26
 """
 
 import re
 from typing import Dict, Any
 
 EXCHANGE_CONFIG: Dict[str, Dict[str, Any]] = {
-    "Binance": {
+    "Binance Spot": {
         "symbol_pattern": r"^[A-Z]{2,10}-[A-Z]{3,5}$",
         "symbol_format": "BTC-USDT",
-        "timeframes": [
-            "1m",
-            "3m",
-            "5m",
-            "15m",
-            "30m",
-            "1h",
-            "2h",
-            "4h",
-            "6h",
-            "8h",
-            "12h",
-            "1d",
-            "3d",
-            "1w",
-            "1M",
-        ],
+        "timeframes": ["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1M"],
         "supports_futures": True,
         "supports_spot": True,
+        "supports_backtesting": True,
+        "supports_live_trading": True,
         "api_prefix": None,
     },
-    "Bybit": {
-        "symbol_pattern": r"^[A-Z]{3,10}[A-Z]{3,5}$",
-        "symbol_format": "BTCUSDT",
-        "timeframes": [
-            "1m",
-            "3m",
-            "5m",
-            "15m",
-            "30m",
-            "1h",
-            "2h",
-            "4h",
-            "6h",
-            "12h",
-            "1d",
-            "1w",
-            "1M",
-        ],
+    "Binance US Spot": {
+        "symbol_pattern": r"^[A-Z]{2,10}-[A-Z]{3,5}$",
+        "symbol_format": "BTC-USDT",
+        "timeframes": ["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1M"],
+        "supports_futures": False,
+        "supports_spot": True,
+        "supports_backtesting": True,
+        "supports_live_trading": True,
+        "api_prefix": None,
+    },
+    "Binance Perpetual Futures": {
+        "symbol_pattern": r"^[A-Z]{2,10}-[A-Z]{3,5}$",
+        "symbol_format": "BTC-USDT",
+        "timeframes": ["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1M"],
         "supports_futures": True,
         "supports_spot": True,
+        "supports_backtesting": True,
+        "supports_live_trading": True,
         "api_prefix": None,
     },
-    "OKX": {
-        "symbol_pattern": r"^[A-Z]{2,10}-[A-Z]{3,5}(-[A-Z]{3,10})?$",
-        "symbol_format": "BTC-USDT-SWAP",
-        "timeframes": [
-            "1m",
-            "3m",
-            "5m",
-            "15m",
-            "30m",
-            "1h",
-            "2h",
-            "4h",
-            "6h",
-            "12h",
-            "1d",
-            "1w",
-            "1M",
-        ],
+    "Bitfinex Spot": {
+        "symbol_pattern": r"^[tT][A-Z]{3,6}[A-Z]{3,6}$|^[A-Z]{2,6}/[A-Z]{3,6}$",
+        "symbol_format": "tBTCUST",
+        "timeframes": ["1m", "5m", "15m", "30m", "1h", "3h", "6h", "12h", "1d", "1w", "1M"],
         "supports_futures": True,
         "supports_spot": True,
+        "supports_backtesting": True,
+        "supports_live_trading": False,
         "api_prefix": None,
     },
-    "Coinbase": {
+    "Coinbase Spot": {
         "symbol_pattern": r"^[A-Z]{2,10}-[A-Z]{3,4}$",
         "symbol_format": "BTC-USD",
         "timeframes": ["1m", "5m", "15m", "1h", "6h", "1d"],
         "supports_futures": False,
         "supports_spot": True,
+        "supports_backtesting": True,
+        "supports_live_trading": True,
+        "api_prefix": None,
+        "aliases": ["Coinbase Advanced"],
+    },
+    "Bybit USDT Perpetual": {
+        "symbol_pattern": r"^[A-Z]{3,10}[A-Z]{3,5}$",
+        "symbol_format": "BTCUSDT",
+        "timeframes": ["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "12h", "1d", "1w", "1M"],
+        "supports_futures": True,
+        "supports_spot": True,
+        "supports_backtesting": True,
+        "supports_live_trading": True,
         "api_prefix": None,
     },
-    "Gate": {
+    "Bybit USDC Perpetual": {
+        "symbol_pattern": r"^[A-Z]{3,10}[A-Z]{3,5}$",
+        "symbol_format": "BTCUSDC",
+        "timeframes": ["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "12h", "1d", "1w", "1M"],
+        "supports_futures": True,
+        "supports_spot": True,
+        "supports_backtesting": True,
+        "supports_live_trading": True,
+        "api_prefix": None,
+    },
+    "Bybit Spot": {
+        "symbol_pattern": r"^[A-Z]{3,10}[A-Z]{3,5}$",
+        "symbol_format": "BTCUSDT",
+        "timeframes": ["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "12h", "1d", "1w", "1M"],
+        "supports_futures": True,
+        "supports_spot": True,
+        "supports_backtesting": True,
+        "supports_live_trading": True,
+        "api_prefix": None,
+    },
+    "Gate.io Perpetual Futures": {
         "symbol_pattern": r"^[A-Z]{2,10}_[A-Z]{3,5}$",
         "symbol_format": "BTC_USDT",
         "timeframes": ["1m", "5m", "15m", "30m", "1h", "4h", "8h", "1d", "1w", "1M"],
         "supports_futures": True,
         "supports_spot": True,
+        "supports_backtesting": True,
+        "supports_live_trading": True,
         "api_prefix": None,
+        "aliases": ["Gate Perpetual", "Gate USDT Perpetual"],
     },
-    "Hyperliquid": {
-        "symbol_pattern": r"^[A-Z]{2,10}$",
-        "symbol_format": "BTC",
-        "timeframes": [
-            "1m",
-            "3m",
-            "5m",
-            "15m",
-            "30m",
-            "1h",
-            "2h",
-            "4h",
-            "6h",
-            "12h",
-            "1d",
-        ],
+    "Gate.io Spot": {
+        "symbol_pattern": r"^[A-Z]{2,10}_[A-Z]{3,5}$",
+        "symbol_format": "BTC_USDT",
+        "timeframes": ["1m", "5m", "15m", "30m", "1h", "4h", "8h", "1d", "1w", "1M"],
         "supports_futures": True,
-        "supports_spot": False,
+        "supports_spot": True,
+        "supports_backtesting": False,
+        "supports_live_trading": True,
         "api_prefix": None,
     },
-    "Apex": {
+    "Apex Pro": {
         "symbol_pattern": r"^[A-Z]{2,10}-[A-Z]{3,5}$",
         "symbol_format": "BTC-USDT",
         "timeframes": ["1m", "5m", "15m", "30m", "1h", "4h", "1d"],
         "supports_futures": True,
         "supports_spot": False,
+        "supports_backtesting": False,
+        "supports_live_trading": True,
         "api_prefix": None,
     },
-    "Bitfinex": {
-        "symbol_pattern": r"^[tT][A-Z]{3,6}[A-Z]{3,6}$|^[A-Z]{2,6}/[A-Z]{3,6}$",
-        "symbol_format": "tBTCUST",
-        "timeframes": [
-            "1m",
-            "5m",
-            "15m",
-            "30m",
-            "1h",
-            "3h",
-            "6h",
-            "12h",
-            "1d",
-            "1w",
-            "1M",
-        ],
+    "Apex Omni": {
+        "symbol_pattern": r"^[A-Z]{2,10}-[A-Z]{3,5}$",
+        "symbol_format": "BTC-USDT",
+        "timeframes": ["1m", "5m", "15m", "30m", "1h", "4h", "1d"],
         "supports_futures": True,
-        "supports_spot": True,
+        "supports_spot": False,
+        "supports_backtesting": False,
+        "supports_live_trading": True,
+        "api_prefix": None,
+    },
+    "Hyperliquid": {
+        "symbol_pattern": r"^[A-Z]{2,10}$",
+        "symbol_format": "BTC",
+        "timeframes": ["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "12h", "1d"],
+        "supports_futures": True,
+        "supports_spot": False,
+        "supports_backtesting": False,
+        "supports_live_trading": True,
         "api_prefix": None,
     },
 }
@@ -226,43 +237,9 @@ def validate_timeframe(exchange: str, timeframe: str) -> Dict[str, Any]:
 
 
 def map_exchange_name(exchange: str, exchange_type: str = "futures") -> str:
-    """Map exchange name to Jesse's full exchange name format."""
-    exchange_map = {
-        "Binance": {
-            "spot": "Binance Spot",
-            "futures": "Binance Perpetual Futures",
-        },
-        "Bybit": {
-            "spot": "Bybit Spot",
-            "futures": "Bybit USDT Perpetual",
-        },
-        "OKX": {
-            "spot": "OKX Spot",
-            "futures": "OKX USDT Perpetual",
-        },
-        "Coinbase": {
-            "spot": "Coinbase Spot",
-            "futures": "Coinbase Futures",
-        },
-        "Gate": {
-            "spot": "Gate Spot",
-            "futures": "Gate USDT Perpetual",
-        },
-        "Bitfinex": {
-            "spot": "Bitfinex Spot",
-            "futures": "Bitfinex Futures",
-        },
-        "Hyperliquid": {
-            "spot": "Hyperliquid",
-            "futures": "Hyperliquid",
-        },
-        "Apex": {
-            "spot": "Apex Spot",
-            "futures": "Apex Futures",
-        },
-    }
-
-    if exchange in exchange_map:
-        return exchange_map[exchange].get(exchange_type, exchange_map[exchange]["futures"])
-
+    """Map exchange name to Jesse's full exchange name format.
+    
+    Most exchanges use the same name for both spot and futures in Jesse,
+    so this function primarily returns the exchange name as-is.
+    """
     return exchange
