@@ -222,36 +222,37 @@ class TestTradingAgent:
 class TestLiveRESTClientMethods:
     """Tests for live trading REST client methods."""
 
-    @patch("jesse_mcp.core.jesse_rest_client.requests.Session")
+    @patch("jesse_mcp.core.rest.client.requests.Session")
     def test_check_live_plugin_available(self, mock_session):
         """Test plugin availability check."""
-        from jesse_mcp.core.jesse_rest_client import JesseRESTClient
+        from jesse_mcp.core.rest import JesseRESTClient
+        from jesse_mcp.core.rest import live
 
         mock_response = Mock()
         mock_response.status_code = 200
         mock_session.return_value.get.return_value = mock_response
 
-        with patch.object(JesseRESTClient, "_verify_connection"):
-            with patch.object(JesseRESTClient, "_authenticate_with_token"):
-                client = JesseRESTClient(api_token="test-token")
+        client = JesseRESTClient.__new__(JesseRESTClient)
+        client.base_url = "http://test:8000"
+        client.session = mock_session.return_value
 
         result = client.check_live_plugin_available()
 
         assert result["available"] is True
 
-    @patch("jesse_mcp.core.jesse_rest_client.requests.Session")
+    @patch("jesse_mcp.core.rest.client.requests.Session")
     def test_start_live_session_payload(self, mock_session):
         """Test start_live_session creates correct payload."""
-        from jesse_mcp.core.jesse_rest_client import JesseRESTClient
+        from jesse_mcp.core.rest import JesseRESTClient
 
         mock_response = Mock()
         mock_response.status_code = 202
         mock_response.json.return_value = {"message": "Started paper trading..."}
         mock_session.return_value.post.return_value = mock_response
 
-        with patch.object(JesseRESTClient, "_verify_connection"):
-            with patch.object(JesseRESTClient, "_authenticate_with_token"):
-                client = JesseRESTClient(api_token="test-token")
+        client = JesseRESTClient.__new__(JesseRESTClient)
+        client.base_url = "http://test:8000"
+        client.session = mock_session.return_value
 
         result = client.start_live_session(
             strategy="TestStrategy",
@@ -265,19 +266,19 @@ class TestLiveRESTClientMethods:
         assert "session_id" in result
         assert result.get("paper_mode") is True
 
-    @patch("jesse_mcp.core.jesse_rest_client.requests.Session")
+    @patch("jesse_mcp.core.rest.client.requests.Session")
     def test_get_live_sessions(self, mock_session):
         """Test get_live_sessions method."""
-        from jesse_mcp.core.jesse_rest_client import JesseRESTClient
+        from jesse_mcp.core.rest import JesseRESTClient
 
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"sessions": []}
         mock_session.return_value.post.return_value = mock_response
 
-        with patch.object(JesseRESTClient, "_verify_connection"):
-            with patch.object(JesseRESTClient, "_authenticate_with_token"):
-                client = JesseRESTClient(api_token="test-token")
+        client = JesseRESTClient.__new__(JesseRESTClient)
+        client.base_url = "http://test:8000"
+        client.session = mock_session.return_value
 
         result = client.get_live_sessions(limit=10, offset=0)
 
