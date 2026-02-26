@@ -339,6 +339,13 @@ class JesseRESTClient:
         try:
             logger.info(f"Starting backtest via REST API with {len(routes)} routes")
 
+            # Validate candle data exists before starting backtest
+            validation_error = self._validate_candle_data(
+                routes, exchange, exchange_type, start_date, end_date
+            )
+            if validation_error:
+                return validation_error
+
             import uuid
 
             # Format routes as UI sends - no "exchange" key, it's at top level
@@ -1162,6 +1169,97 @@ class JesseRESTClient:
             return exchange_map[exchange].get(exchange_type, exchange_map[exchange]["futures"])
 
         return exchange
+
+    def _validate_candle_data(
+        self,
+        routes: List[Dict[str, str]],
+        exchange: str,
+        exchange_type: str,
+        start_date: str,
+        end_date: str,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Validate that candle data exists for the requested backtest dict if no data.
+
+        Returns error, None if validation passes.
+
+        Note: The Jesse API /candles/existing endpoint doesn't return timeframe info,
+        so we can only check if exchange/symbol has any data, not if the specific
+        timeframe has data. This is a limitation of the Jesse API.
+        """
+        try:
+            # Get existing candles
+            candles_response = self.session.post(
+                f"{self.base_url}/candles/existing",
+                json={},
+                timeout=10,
+            )
+            candles_response.raise_for_status()
+            data = candles_response.json().get("data", [])
+
+            # Map exchange name
+            exchange_name = self._map_exchange_name(exchange, exchange_type)
+
+            # Check each route for data
+            missing = []
+            for route in routes:
+                symbol = route["symbol"]
+                timeframe = route["timeframe"]
+
+                # Find matching candle (note: API doesn't return timeframe info)
+                found = False
+                for candle in data:
+                    if candle["exchange"] == exchange_name and candle["symbol"] == symbol:
+                        # Check if date range overlaps
+                        candle_start = candle.get("start_date", "")
+                        candle_end = candle.get("end_date", "")
+
+                        if candle_start and candle_end:
+                            # Overlap if candle starts before end AND ends after start
+                            if candle_start <= end_date and candle_end >= start_date:
+                                found = True
+                                logger.debug(
+                                    f"Found data for {exchange_name} {symbol} {timeframe}: {candle_start} to {candle_end}"
+                                )
+                                break
+
+                if not found:
+                    # Check what data DOES exist for this exchange/symbol
+                    available = []
+                    for candle in data:
+                        if candle["symbol"] == symbol:
+                            available.append(
+                                f"{candle['exchange']} ({candle.get('start_date', '?')}-{candle.get('end_date', '?')})"
+                            )
+
+                    if available:
+                        missing.append(
+                            f"{exchange_name} {symbol} {timeframe} (only has: {', '.join(available)})"
+                        )
+                    else:
+                        missing.append(f"{exchange_name} {symbol} {timeframe} (no data at all)")
+
+            if missing:
+                error_msg = (
+                    f"No candle data found for requested date range. "
+                    f"Please import candles first using the candles_import tool.\n"
+                    f"Missing: {'; '.join(missing)}"
+                )
+                logger.error(f"❌ {error_msg}")
+                return {
+                    "error": error_msg,
+                    "error_type": "NoCandleDataError",
+                    "success": False,
+                    "missing_data": missing,
+                }
+
+            logger.info(f"✅ Candle data validated for all routes")
+            return None
+
+        except Exception as e:
+            logger.warning(f"⚠️ Could not validate candle data: {e}")
+            # Don't fail if we can't check - might be network issue
+            return None
 
     def optimization(
         self,
