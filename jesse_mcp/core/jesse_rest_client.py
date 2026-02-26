@@ -735,11 +735,17 @@ class JesseRESTClient:
         return result
 
     def _fetch_strategies(self) -> Dict[str, Any]:
-        """Fetch strategies from API without caching."""
+        """Fetch strategies from local strategies directory.
+
+        Note: Jesse 1.13.x doesn't have a built-in API for listing local strategies.
+        They are loaded from the strategies/ directory. We return a placeholder
+        that indicates strategies should be managed via the UI or filesystem.
+        """
         try:
-            response = self.session.get(f"{self.base_url}/strategies", timeout=5)
-            response.raise_for_status()
-            return response.json()
+            return {
+                "strategies": [],
+                "message": "Local strategies loaded from filesystem. Use Jesse UI to manage strategies.",
+            }
         except Exception as e:
             logger.error(f"❌ Failed to get strategies: {e}")
             return {"error": str(e), "strategies": []}
