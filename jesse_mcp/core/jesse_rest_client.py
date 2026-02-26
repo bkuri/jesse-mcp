@@ -307,6 +307,7 @@ class JesseRESTClient:
         include_logs: bool = False,
         auto_import_candles: bool = False,
         auto_import_max_candles: int = 50000,
+        fast_mode: bool = True,
     ) -> Dict[str, Any]:
         """
         Run a backtest via Jesse REST API
@@ -378,6 +379,7 @@ class JesseRESTClient:
             # Format config as Jesse 1.13.x expects - matches UI format exactly
             config = {
                 "warm_up_candles": 240,
+                "fast_mode": fast_mode,
                 "logging": {
                     "shorter_period_candles": False,
                     "balance_update": True,
@@ -511,6 +513,9 @@ class JesseRESTClient:
         include_trades: bool = False,
         include_equity_curve: bool = False,
         include_logs: bool = False,
+        auto_import_candles: bool = False,
+        auto_import_max_candles: int = 50000,
+        fast_mode: bool = True,
     ) -> Dict[str, Any]:
         """
         Run a backtest with caching support (1 hour TTL by default).
@@ -587,6 +592,9 @@ class JesseRESTClient:
             include_trades=include_trades,
             include_equity_curve=include_equity_curve,
             include_logs=include_logs,
+            auto_import_candles=auto_import_candles,
+            auto_import_max_candles=auto_import_max_candles,
+            fast_mode=fast_mode,
         )
 
         if "error" not in result:
@@ -609,6 +617,9 @@ class JesseRESTClient:
         hyperparameters: Optional[Dict[str, Any]] = None,
         max_retries: int = 3,
         initial_delay: float = 1.0,
+        auto_import_candles: bool = False,
+        auto_import_max_candles: int = 50000,
+        fast_mode: bool = True,
     ) -> Dict[str, Any]:
         """
         Run a backtest with retry logic for transient errors.
@@ -651,6 +662,9 @@ class JesseRESTClient:
                     exchange_type=exchange_type,
                     data_routes=data_routes,
                     hyperparameters=hyperparameters,
+                    auto_import_candles=auto_import_candles,
+                    auto_import_max_candles=auto_import_max_candles,
+                    fast_mode=fast_mode,
                 )
 
                 # Check if result is successful
