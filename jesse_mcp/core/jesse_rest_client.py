@@ -305,6 +305,8 @@ class JesseRESTClient:
         include_trades: bool = False,
         include_equity_curve: bool = False,
         include_logs: bool = False,
+        auto_import_candles: bool = False,
+        auto_import_max_candles: int = 50000,
     ) -> Dict[str, Any]:
         """
         Run a backtest via Jesse REST API
@@ -323,6 +325,8 @@ class JesseRESTClient:
             include_trades: Include individual trades
             include_equity_curve: Include equity curve data
             include_logs: Include strategy logs
+            auto_import_candles: If True, automatically import missing candles
+            auto_import_max_candles: Max candles to import when auto_import_candles is True
 
         Returns:
             Backtest results dict
@@ -341,7 +345,13 @@ class JesseRESTClient:
 
             # Validate candle data exists before starting backtest
             validation_error = self._validate_candle_data(
-                routes, exchange, exchange_type, start_date, end_date
+                routes,
+                exchange,
+                exchange_type,
+                start_date,
+                end_date,
+                auto_import_candles=auto_import_candles,
+                auto_import_max_candles=auto_import_max_candles,
             )
             if validation_error:
                 return validation_error
@@ -1177,15 +1187,16 @@ class JesseRESTClient:
         exchange_type: str,
         start_date: str,
         end_date: str,
+        auto_import_candles: bool = False,
+        auto_import_max_candles: int = 50000,
     ) -> Optional[Dict[str, Any]]:
         """
-        Validate that candle data exists for the requested backtest dict if no data.
+        Validate that candle data exists for the requested backtest.
 
-        Returns error, None if validation passes.
+        Returns error dict if no data, None if validation passes.
 
-        Note: The Jesse API /candles/existing endpoint doesn't return timeframe info,
-        so we can only check if exchange/symbol has any data, not if the specific
-        timeframe has data. This is a limitation of the Jesse API.
+        If auto_import_candles is True, will attempt to import missing candles
+        up to auto_import_max_candles limit.
         """
         try:
             # Get existing candles
@@ -1208,6 +1219,7 @@ class JesseRESTClient:
 
                 # Find matching candle (note: API doesn't return timeframe info)
                 found = False
+                existing_dates = None
                 for candle in data:
                     if candle["exchange"] == exchange_name and candle["symbol"] == symbol:
                         # Check if date range overlaps
@@ -1218,48 +1230,233 @@ class JesseRESTClient:
                             # Overlap if candle starts before end AND ends after start
                             if candle_start <= end_date and candle_end >= start_date:
                                 found = True
-                                logger.debug(
-                                    f"Found data for {exchange_name} {symbol} {timeframe}: {candle_start} to {candle_end}"
-                                )
+                                existing_dates = (candle_start, candle_end)
                                 break
 
                 if not found:
-                    # Check what data DOES exist for this exchange/symbol
-                    available = []
-                    for candle in data:
-                        if candle["symbol"] == symbol:
-                            available.append(
-                                f"{candle['exchange']} ({candle.get('start_date', '?')}-{candle.get('end_date', '?')})"
-                            )
-
-                    if available:
-                        missing.append(
-                            f"{exchange_name} {symbol} {timeframe} (only has: {', '.join(available)})"
-                        )
-                    else:
-                        missing.append(f"{exchange_name} {symbol} {timeframe} (no data at all)")
+                    missing.append(
+                        {
+                            "exchange": exchange_name,
+                            "symbol": symbol,
+                            "timeframe": timeframe,
+                        }
+                    )
 
             if missing:
-                error_msg = (
-                    f"No candle data found for requested date range. "
-                    f"Please import candles first using the candles_import tool.\n"
-                    f"Missing: {'; '.join(missing)}"
-                )
-                logger.error(f"❌ {error_msg}")
-                return {
-                    "error": error_msg,
-                    "error_type": "NoCandleDataError",
-                    "success": False,
-                    "missing_data": missing,
-                }
+                if auto_import_candles:
+                    # Try to import missing candles
+                    logger.info(f"🔄 Auto-importing missing candles for {len(missing)} route(s)...")
+
+                    for m in missing:
+                        import_result = self._import_candles(
+                            exchange=m["exchange"],
+                            symbol=m["symbol"],
+                            timeframe=m["timeframe"],
+                            start_date=start_date,
+                            end_date=end_date,
+                            max_candles=auto_import_max_candles,
+                        )
+
+                        if import_result.get("success"):
+                            logger.info(
+                                f"✅ Imported {import_result.get('candles_imported', '?')} candles for {m['symbol']} {m['timeframe']}"
+                            )
+                        else:
+                            logger.warning(
+                                f"⚠️ Failed to import: {import_result.get('error', 'Unknown error')}"
+                            )
+
+                    # Re-check after import
+                    candles_response = self.session.post(
+                        f"{self.base_url}/candles/existing",
+                        json={},
+                        timeout=10,
+                    )
+                    candles_response.raise_for_status()
+                    data = candles_response.json().get("data", [])
+
+                    # Check again
+                    still_missing = []
+                    for m in missing:
+                        found = False
+                        for candle in data:
+                            if (
+                                candle["exchange"] == m["exchange"]
+                                and candle["symbol"] == m["symbol"]
+                            ):
+                                candle_start = candle.get("start_date", "")
+                                candle_end = candle.get("end_date", "")
+                                if candle_start <= end_date and candle_end >= start_date:
+                                    found = True
+                                    break
+                        if not found:
+                            still_missing.append(f"{m['exchange']} {m['symbol']} {m['timeframe']}")
+
+                    if still_missing:
+                        error_msg = (
+                            f"Still missing candle data after auto-import: {', '.join(still_missing)}. "
+                            f"Please import candles manually using the candles_import tool."
+                        )
+                        return {
+                            "error": error_msg,
+                            "error_type": "NoCandleDataError",
+                            "success": False,
+                            "missing_data": still_missing,
+                        }
+
+                    logger.info(f"✅ Candle data validated after auto-import")
+                    return None
+                else:
+                    # Build error message
+                    error_details = []
+                    for m in missing:
+                        # Check what data DOES exist
+                        available = []
+                        for candle in data:
+                            if candle["symbol"] == m["symbol"]:
+                                available.append(
+                                    f"{candle['exchange']} ({candle.get('start_date', '?')}-{candle.get('end_date', '?')})"
+                                )
+
+                        if available:
+                            error_details.append(
+                                f"{m['exchange']} {m['symbol']} {m['timeframe']} (available: {', '.join(available)})"
+                            )
+                        else:
+                            error_details.append(
+                                f"{m['exchange']} {m['symbol']} {m['timeframe']} (no data at all)"
+                            )
+
+                    error_msg = (
+                        f"No candle data found for requested date range. "
+                        f"Set auto_import_candles=True to automatically import, "
+                        f"or import manually using the candles_import tool.\n"
+                        f"Missing: {'; '.join(error_details)}"
+                    )
+                    logger.error(f"❌ {error_msg}")
+                    return {
+                        "error": error_msg,
+                        "error_type": "NoCandleDataError",
+                        "success": False,
+                        "missing_data": error_details,
+                    }
 
             logger.info(f"✅ Candle data validated for all routes")
             return None
 
         except Exception as e:
             logger.warning(f"⚠️ Could not validate candle data: {e}")
-            # Don't fail if we can't check - might be network issue
             return None
+
+    def _import_candles(
+        self,
+        exchange: str,
+        symbol: str,
+        timeframe: str,
+        start_date: str,
+        end_date: str,
+        max_candles: int = 50000,
+    ) -> Dict[str, Any]:
+        """
+        Import candles from exchange via Jesse API.
+        """
+        import uuid
+
+        candle_id = str(uuid.uuid4())
+
+        # Calculate approximate candles needed
+        # This is rough - could estimate based on timeframe
+        timeframe_minutes = {
+            "1m": 1,
+            "3m": 3,
+            "5m": 5,
+            "15m": 15,
+            "30m": 30,
+            "1h": 60,
+            "2h": 120,
+            "4h": 240,
+            "6h": 360,
+            "8h": 480,
+            "12h": 720,
+            "1d": 1440,
+            "3d": 4320,
+            "1w": 10080,
+        }
+        minutes = timeframe_minutes.get(timeframe, 60)
+        from datetime import datetime
+
+        try:
+            start = datetime.strptime(start_date, "%Y-%m-%d")
+            end = datetime.strptime(end_date, "%Y-%m-%d")
+            days = (end - start).days
+            estimated_candles = (days * 24 * 60) // minutes
+        except:
+            estimated_candles = max_candles  # Safe default
+
+        # Cap at max_candles
+        if estimated_candles > max_candles:
+            # Adjust start date to fit within limit
+            # This is a rough calculation
+            extra_days = (estimated_candles - max_candles) * minutes // (24 * 60)
+            from datetime import timedelta
+
+            start_obj = datetime.strptime(start_date, "%Y-%m-%d") + timedelta(days=extra_days)
+            start_date = start_obj.strftime("%Y-%m-%d")
+            logger.info(f"⚠️ Limited candles to {max_candles}, adjusted start date to {start_date}")
+
+        try:
+            response = self.session.post(
+                f"{self.base_url}/candles/import",
+                json={
+                    "id": candle_id,
+                    "exchange": exchange,
+                    "symbol": symbol,
+                    "timeframe": timeframe,
+                    "start_date": start_date,
+                    "finish_date": end_date,
+                },
+                timeout=30,
+            )
+            response.raise_for_status()
+
+            # Poll for completion
+            import time
+
+            max_wait = 120  # 2 minutes max
+            waited = 0
+
+            while waited < max_wait:
+                time.sleep(2)
+                waited += 2
+
+                status_resp = self.session.get(
+                    f"{self.base_url}/candles/import/{candle_id}",
+                    timeout=10,
+                )
+
+                if status_resp.status_code == 200:
+                    status_data = status_resp.json()
+                    if status_data.get("status") == "completed":
+                        return {
+                            "success": True,
+                            "candles_imported": status_data.get("imported_count", 0),
+                        }
+                    elif status_data.get("status") == "failed":
+                        return {
+                            "success": False,
+                            "error": status_data.get("error", "Import failed"),
+                        }
+
+            return {
+                "success": False,
+                "error": "Import timed out",
+            }
+
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e),
+            }
 
     def optimization(
         self,
