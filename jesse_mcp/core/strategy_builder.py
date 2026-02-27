@@ -47,18 +47,7 @@ STRATEGY_TYPE_INDICATORS: Dict[str, List[str]] = {
 
 @dataclass
 class StrategySpec:
-    """
-    Specification for a trading strategy.
-
-    Attributes:
-        name: Strategy name (used as class name)
-        description: Human-readable description of the strategy
-        strategy_type: Type classification (trend_following, mean_reversion, etc.)
-        indicators: List of technical indicators to use
-        risk_per_trade: Risk percentage per trade (0.01 = 1%)
-        timeframe: Primary trading timeframe (1h, 4h, 1d, etc.)
-        additional_params: Extra parameters for strategy customization
-    """
+    """Specification for a trading strategy."""
 
     name: str
     description: str
@@ -74,16 +63,7 @@ class StrategySpec:
 
 
 def infer_indicators(description: str, strategy_type: str) -> List[str]:
-    """
-    Infer appropriate indicators from description and strategy type.
-
-    Args:
-        description: Natural language description of the strategy
-        strategy_type: Strategy type classification
-
-    Returns:
-        List of indicator names to use
-    """
+    """Infer appropriate indicators from description and strategy type."""
     description_lower = description.lower()
     inferred: List[str] = []
 
@@ -105,63 +85,183 @@ def infer_indicators(description: str, strategy_type: str) -> List[str]:
     return inferred
 
 
+STRATEGY_IMPORTS = """from jesse.strategies import Strategy
+import jesse.indicators as ta
+import jesse.helpers as utils
+"""
+
+
+def _build_ema_crossover_properties() -> str:
+    return """    @property
+    def ema_fast(self):
+        return ta.ema(self.candles, self.hp['fast_period'])
+
+    @property
+    def ema_slow(self):
+        return ta.ema(self.candles, self.hp['slow_period'])"""
+
+
+def _build_sma_crossover_properties() -> str:
+    return """    @property
+    def sma_fast(self):
+        return ta.sma(self.candles, self.hp['fast_period'])
+
+    @property
+    def sma_slow(self):
+        return ta.sma(self.candles, self.hp['slow_period'])"""
+
+
+def _build_rsi_properties() -> str:
+    return """    @property
+    def rsi(self):
+        return ta.rsi(self.candles, self.hp['rsi_period'])"""
+
+
+def _build_ema_crossover_should_methods() -> str:
+    return """    def should_long(self) -> bool:
+        if self.prev_fast_above is not None and not self.prev_fast_above and self.fast_above:
+            return True
+        return False
+
+    def should_short(self) -> bool:
+        if self.prev_fast_above is not None and self.prev_fast_above and not self.fast_above:
+            return True
+        return False"""
+
+
+def _build_rsi_should_methods() -> str:
+    return """    def should_long(self) -> bool:
+        return self.rsi < self.hp['rsi_oversold']
+
+    def should_short(self) -> bool:
+        return self.rsi > self.hp['rsi_overbought']"""
+
+
+def _build_default_should_methods() -> str:
+    return """    def should_long(self) -> bool:
+        return False
+
+    def should_short(self) -> bool:
+        return False"""
+
+
+def _build_entry_methods() -> str:
+    return """    def go_long(self):
+        entry_price = self.price
+        qty = utils.size_to_qty(self.balance * 0.95, entry_price)
+        self.buy = qty, entry_price
+
+    def go_short(self):
+        entry_price = self.price
+        qty = utils.size_to_qty(self.balance * 0.95, entry_price)
+        self.sell = qty, entry_price"""
+
+
+def _build_hyperparameters(indicators: List[str]) -> str:
+    params = []
+
+    if "sma" in indicators or "ema" in indicators:
+        params.extend(
+            [
+                "{'name': 'fast_period', 'type': int, 'default': 20, 'min': 5, 'max': 50}",
+                "{'name': 'slow_period', 'type': int, 'default': 50, 'min': 20, 'max': 200}",
+            ]
+        )
+
+    if "rsi" in indicators:
+        params.append("{'name': 'rsi_period', 'type': int, 'default': 14, 'min': 7, 'max': 28}")
+        params.append(
+            "{'name': 'rsi_overbought', 'type': int, 'default': 70, 'min': 60, 'max': 90}"
+        )
+        params.append("{'name': 'rsi_oversold', 'type': int, 'default': 30, 'min': 10, 'max': 40}")
+
+    if "macd" in indicators:
+        params.extend(
+            [
+                "{'name': 'macd_fast', 'type': int, 'default': 12, 'min': 5, 'max': 26}",
+                "{'name': 'macd_slow', 'type': int, 'default': 26, 'min': 13, 'max': 52}",
+                "{'name': 'macd_signal', 'type': int, 'default': 9, 'min': 5, 'max': 20}",
+            ]
+        )
+
+    if not params:
+        params.append(
+            "{'name': 'risk_per_trade', 'type': float, 'default': 0.01, 'min': 0.001, 'max': 0.05}"
+        )
+
+    return "[\n            " + ",\n            ".join(params) + "\n        ]"
+
+
+def _build_indicator_properties(indicators: List[str]) -> List[str]:
+    props = []
+    if "ema" in indicators:
+        props.append(_build_ema_crossover_properties())
+    elif "sma" in indicators:
+        props.append(_build_sma_crossover_properties())
+    if "rsi" in indicators:
+        props.append(_build_rsi_properties())
+    return props
+
+
 class StrategyBuilder:
-    """
-    Strategy generation and iterative refinement framework.
+    """Strategy generation and iterative refinement framework."""
 
-    This class handles:
-    - Generating initial strategy code templates
-    - Refining strategies based on validation errors
-    - Refining strategies based on runtime errors
-    - Running refinement loops until validation passes
-    """
-
-    def __init__(self, validator: "StrategyValidator") -> None:
-        """
-        Initialize the strategy builder.
-
-        Args:
-            validator: StrategyValidator instance for validation
-        """
+    def __init__(self, validator: "StrategyValidator"):
         self.validator = validator
         self._refinement_count = 0
         logger.info("✅ StrategyBuilder initialized")
 
     def generate_initial(self, spec: StrategySpec) -> str:
-        """
-        Generate initial strategy code template.
-
-        This generates a placeholder template that should be filled in by an LLM.
-
-        Args:
-            spec: Strategy specification
-
-        Returns:
-            Strategy code template string
-        """
+        """Generate initial strategy code with actual trading logic."""
         logger.info(f"Generating initial strategy: {spec.name}")
 
-        indicators_init = self._generate_indicator_init(spec.indicators)
-        hyperparameters = self._generate_hyperparameters(spec.indicators)
+        hyperparameters = _build_hyperparameters(spec.indicators)
+        indicator_props = _build_indicator_properties(spec.indicators)
+        indicator_props_str = "\n\n".join(indicator_props) if indicator_props else "pass"
 
-        code = f'''"""
-{spec.description}
+        if "ema" in spec.indicators:
+            should_methods = _build_ema_crossover_should_methods()
+        elif "rsi" in spec.indicators:
+            should_methods = _build_rsi_should_methods()
+        else:
+            should_methods = _build_default_should_methods()
+
+        if "ema" in spec.indicators:
+            before_init = "self.fast_above = self.ema_fast > self.ema_slow\n        self.prev_fast_above = getattr(self, 'fast_above', None)"
+        elif "sma" in spec.indicators:
+            before_init = "self.fast_above = self.sma_fast > self.sma_slow\n        self.prev_fast_above = getattr(self, 'fast_above', None)"
+        else:
+            before_init = "pass"
+
+        docstring = f"""{spec.description}
 
 Strategy Type: {spec.strategy_type}
 Indicators: {", ".join(spec.indicators)}
 Timeframe: {spec.timeframe}
-Risk per Trade: {spec.risk_per_trade * 100}%
+Risk per Trade: {spec.risk_per_trade * 100}%"""
+
+        if "ema" in spec.indicators:
+            strategy_doc = f"""{spec.description}
+
+EMA crossover strategy - enters long when fast EMA crosses above slow EMA,
+enters short when fast EMA crosses below slow EMA."""
+        elif "rsi" in spec.indicators:
+            strategy_doc = f"""{spec.description}
+
+RSI mean reversion - buys when RSI is oversold, sells when RSI is overbought."""
+        else:
+            strategy_doc = spec.description
+
+        code = f'''"""
+{docstring}
 """
 
-from jesse.strategies import Strategy
-import jesse.indicators as ta
+{STRATEGY_IMPORTS}
 
 
 class {spec.name}(Strategy):
     """
-    {spec.description}
-
-    Auto-generated strategy template - requires LLM refinement.
+    {strategy_doc}
     """
 
     def __init__(self):
@@ -173,108 +273,28 @@ class {spec.name}(Strategy):
         return {hyperparameters}
 
     def before(self):
-        {indicators_init}
+        {before_init}
 
-    def should_long(self) -> bool:
-        return False
+{indicator_props_str}
 
-    def should_short(self) -> bool:
-        return False
+{should_methods}
 
-    def go_long(self):
-        pass
-
-    def go_short(self):
-        pass
+{_build_entry_methods()}
 
     def should_cancel_entry(self) -> bool:
-        return True
+        return False
 
-    def on_close_position(self, order):
-        pass
-
-    def hyperparameters(self):
-        return self.hyperparameters
+    def on_open_position(self, order):
+        stop_loss = self.price - (self.atr * 2)
+        take_profit = self.price + (self.atr * 3)
+        self.stop_loss = self.position.qty, stop_loss
+        self.take_profit = self.position.qty, take_profit
 '''
-        logger.info(f"✅ Generated initial template for {spec.name} ({len(code)} bytes)")
+        logger.info(f"✅ Generated initial strategy for {spec.name} ({len(code)} bytes)")
         return code
 
-    def _generate_indicator_init(self, indicators: List[str]) -> str:
-        """Generate indicator initialization code."""
-        if not indicators:
-            return "pass"
-
-        lines = []
-        for indicator in indicators:
-            if indicator == "sma":
-                lines.append("self.sma_fast = ta.sma(self.candles, 20)")
-                lines.append("self.sma_slow = ta.sma(self.candles, 50)")
-            elif indicator == "ema":
-                lines.append("self.ema_fast = ta.ema(self.candles, 12)")
-                lines.append("self.ema_slow = ta.ema(self.candles, 26)")
-            elif indicator == "rsi":
-                lines.append("self.rsi = ta.rsi(self.candles, 14)")
-            elif indicator == "macd":
-                lines.append("self.macd = ta.macd(self.candles)")
-            elif indicator == "bollinger_bands":
-                lines.append("self.bb = ta.bollinger_bands(self.candles)")
-            elif indicator == "atr":
-                lines.append("self.atr = ta.atr(self.candles, 14)")
-            elif indicator == "adx":
-                lines.append("self.adx = ta.adx(self.candles, 14)")
-            else:
-                lines.append(f"# TODO: Initialize {indicator}")
-
-        return "\n        ".join(lines)
-
-    def _generate_hyperparameters(self, indicators: List[str]) -> str:
-        """Generate hyperparameters list."""
-        params = []
-
-        if "sma" in indicators or "ema" in indicators:
-            params.extend(
-                [
-                    "{'name': 'fast_period', 'type': int, 'default': 20, 'min': 5, 'max': 50}",
-                    "{'name': 'slow_period', 'type': int, 'default': 50, 'min': 20, 'max': 200}",
-                ]
-            )
-
-        if "rsi" in indicators:
-            params.append("{'name': 'rsi_period', 'type': int, 'default': 14, 'min': 7, 'max': 28}")
-            params.append(
-                "{'name': 'rsi_overbought', 'type': int, 'default': 70, 'min': 60, 'max': 90}"
-            )
-            params.append(
-                "{'name': 'rsi_oversold', 'type': int, 'default': 30, 'min': 10, 'max': 40}"
-            )
-
-        if "macd" in indicators:
-            params.extend(
-                [
-                    "{'name': 'macd_fast', 'type': int, 'default': 12, 'min': 5, 'max': 26}",
-                    "{'name': 'macd_slow', 'type': int, 'default': 26, 'min': 13, 'max': 52}",
-                    "{'name': 'macd_signal', 'type': int, 'default': 9, 'min': 5, 'max': 20}",
-                ]
-            )
-
-        if not params:
-            params.append(
-                "{'name': 'risk_per_trade', 'type': float, 'default': 0.01, 'min': 0.001, 'max': 0.05}"
-            )
-
-        return "[\n            " + ",\n            ".join(params) + "\n        ]"
-
     def refine_from_validation(self, code: str, result: Dict[str, Any]) -> str:
-        """
-        Refine strategy code based on validation errors using LLM.
-
-        Args:
-            code: Current strategy code
-            result: Validation result containing errors
-
-        Returns:
-            Refined strategy code
-        """
+        """Refine strategy code based on validation errors using LLM."""
         self._refinement_count += 1
         logger.info(f"🔧 Refining strategy (iteration {self._refinement_count})")
 
@@ -328,7 +348,7 @@ Instructions:
 1. Fix all validation errors
 2. Keep the same strategy name and indicators
 3. Implement proper trading logic (not just pass/return False)
-4. Use Jesse framework conventions (self.candles, ta.* indicators, etc.)
+4. Use Jesse framework conventions (self.candles, ta.* indicators, utils.* helpers, etc.)
 5. Return ONLY the fixed Python code, no explanations
 
 Fix the code:"""
@@ -379,7 +399,6 @@ Fix the code:"""
     def _fix_syntax_errors(self, code: str, error: Dict) -> str:
         """Fix syntax errors."""
         error_msg = error.get("error", "")
-        line = error.get("line", 0)
 
         if "expected ':'" in error_msg.lower():
             lines = code.split("\n")
@@ -447,107 +466,11 @@ Fix the code:"""
             code = code[:insert_pos] + new_method + code[insert_pos:]
         return code
 
-    def _add_missing_methods(self, code: str, methods: List[str]) -> str:
-        """Add placeholder implementations for missing methods."""
-        method_templates = {
-            "should_long": """
-    def should_long(self) -> bool:
-        return False""",
-            "should_short": """
-    def should_short(self) -> bool:
-        return False""",
-            "go_long": """
-    def go_long(self):
-        pass""",
-            "go_short": """
-    def go_short(self):
-        pass""",
-            "should_cancel_entry": """
-    def should_cancel_entry(self) -> bool:
-        return True""",
-        }
-
-        for method in methods:
-            if method in method_templates and method not in code:
-                insert_pos = code.rfind("class ")
-                class_end = code.find(":", insert_pos)
-                next_class_or_end = code.find("\nclass ", class_end)
-                if next_class_or_end == -1:
-                    next_class_or_end = len(code)
-
-                code = (
-                    code[:next_class_or_end] + method_templates[method] + code[next_class_or_end:]
-                )
-                logger.info(f"Added missing method: {method}")
-
-        return code
-
     def refine_from_error(self, code: str, error: str) -> str:
-        """
-        Refine strategy code based on runtime error.
-
-        This is a placeholder that should be implemented by an LLM agent.
-        The actual refinement requires understanding the specific runtime error.
-
-        Args:
-            code: Current strategy code
-            error: Runtime error message
-
-        Returns:
-            Refined strategy code
-        """
+        """Refine strategy code based on runtime error."""
         self._refinement_count += 1
-        logger.warning(
-            f"⚠️ refine_from_error called (iteration {self._refinement_count}) - "
-            "LLM refinement required"
-        )
+        logger.warning(f"⚠️ refine_from_error called (iteration {self._refinement_count})")
         logger.error(f"Runtime error: {error}")
-
-        common_fixes = {
-            "NameError": self._fix_name_error,
-            "AttributeError": self._fix_attribute_error,
-            "TypeError": self._fix_type_error,
-            "IndexError": self._fix_index_error,
-        }
-
-        for error_type, fix_func in common_fixes.items():
-            if error_type in error:
-                logger.info(f"Attempting to fix {error_type}")
-                return fix_func(code, error)
-
-        return code
-
-    def _fix_name_error(self, code: str, error: str) -> str:
-        """Attempt to fix NameError."""
-        import re
-
-        name_match = re.search(r"name '(\w+)' is not defined", error)
-        if name_match:
-            undefined_name = name_match.group(1)
-            logger.info(f"Found undefined name: {undefined_name}")
-
-        return code
-
-    def _fix_attribute_error(self, code: str, error: str) -> str:
-        """Attempt to fix AttributeError."""
-        import re
-
-        attr_match = re.search(r"'(\w+)' object has no attribute '(\w+)'", error)
-        if attr_match:
-            obj_name = attr_match.group(1)
-            attr_name = attr_match.group(2)
-            logger.info(f"Found missing attribute: {obj_name}.{attr_name}")
-
-        return code
-
-    def _fix_type_error(self, code: str, error: str) -> str:
-        """Attempt to fix TypeError."""
-        logger.info("TypeError detected - manual review recommended")
-        return code
-
-    def _fix_index_error(self, code: str, error: str) -> str:
-        """Attempt to fix IndexError."""
-        logger.info("IndexError detected - check array/candle access")
         return code
 
     def refinement_loop(
@@ -557,18 +480,7 @@ Fix the code:"""
         max_iter: int = 5,
         progress_callback: Optional[Callable[[float, str, int], None]] = None,
     ) -> Tuple[str, List[Dict[str, Any]], bool]:
-        """
-        Run iterative refinement loop until validation passes or max iterations.
-
-        Args:
-            code: Initial strategy code
-            spec: Strategy specification
-            max_iter: Maximum refinement iterations
-            progress_callback: Optional callback(percent, step, iteration)
-
-        Returns:
-            Tuple of (final_code, validation_history, success)
-        """
+        """Run iterative refinement loop until validation passes or max iterations."""
         logger.info(f"Starting refinement loop (max {max_iter} iterations)")
 
         history: List[Dict[str, Any]] = []
@@ -624,15 +536,7 @@ Fix the code:"""
 
 
 def get_strategy_builder(validator: Optional["StrategyValidator"] = None) -> StrategyBuilder:
-    """
-    Factory function to get StrategyBuilder instance.
-
-    Args:
-        validator: Optional StrategyValidator instance
-
-    Returns:
-        StrategyBuilder instance
-    """
+    """Factory function to get StrategyBuilder instance."""
     if validator is None:
         from jesse_mcp.core.strategy_validator import get_validator
 
