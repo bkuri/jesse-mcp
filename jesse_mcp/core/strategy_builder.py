@@ -5,7 +5,10 @@ Provides strategy generation and iterative refinement capabilities for
 autonomous trading strategy development.
 """
 
+import json
 import logging
+import os
+import re
 from dataclasses import dataclass, field
 from typing import Dict, Any, List, Optional, Tuple, Callable, TYPE_CHECKING
 
@@ -13,6 +16,9 @@ if TYPE_CHECKING:
     from jesse_mcp.core.strategy_validator import StrategyValidator
 
 logger = logging.getLogger("jesse-mcp.strategy_builder")
+
+LLM_ENDPOINT = os.getenv("LLM_ENDPOINT", "")
+LLM_API_KEY = os.getenv("LLM_API_KEY", "")
 
 INDICATOR_KEYWORDS: Dict[str, List[str]] = {
     "trend": ["sma", "ema", "macd", "ichimoku", "supertrend", "parabolic_sar", "adx"],
@@ -260,10 +266,7 @@ class {spec.name}(Strategy):
 
     def refine_from_validation(self, code: str, result: Dict[str, Any]) -> str:
         """
-        Refine strategy code based on validation errors.
-
-        This is a placeholder that should be implemented by an LLM agent.
-        The actual refinement logic requires understanding the specific errors.
+        Refine strategy code based on validation errors using LLM.
 
         Args:
             code: Current strategy code
@@ -273,21 +276,175 @@ class {spec.name}(Strategy):
             Refined strategy code
         """
         self._refinement_count += 1
-        logger.warning(
-            f"⚠️ refine_from_validation called (iteration {self._refinement_count}) - "
-            "LLM refinement required"
-        )
+        logger.info(f"🔧 Refining strategy (iteration {self._refinement_count})")
 
         errors = result.get("errors", [])
-        missing_methods = result.get("missing_methods", [])
+        warnings = result.get("warnings", [])
 
-        if missing_methods:
-            logger.info(f"Missing methods detected: {missing_methods}")
-            code = self._add_missing_methods(code, missing_methods)
+        if not errors:
+            logger.info("No errors to fix")
+            return code
 
-        if result.get("syntax_error"):
-            logger.error(f"Syntax error: {result['syntax_error']}")
+        error_summary = "\n".join(
+            [f"- {e.get('level', 'unknown')}: {e.get('error', 'Unknown error')}" for e in errors]
+        )
+        logger.warning(f"Errors to fix:\n{error_summary}")
 
+        if LLM_ENDPOINT and LLM_API_KEY:
+            try:
+                fixed_code = self._fix_with_llm(code, errors, warnings, result.get("spec", {}))
+                if fixed_code:
+                    logger.info("✅ LLM successfully fixed the code")
+                    return fixed_code
+            except Exception as e:
+                logger.warning(f"LLM refinement failed: {e}, falling back to template-based fixes")
+
+        fixed_code = self._fix_with_templates(code, errors, result)
+        return fixed_code
+
+    def _fix_with_llm(
+        self, code: str, errors: List[Dict], warnings: List[Dict], spec: Dict
+    ) -> Optional[str]:
+        """Fix validation errors using LLM API."""
+        import requests
+
+        error_summary = "\n".join(
+            [f"- {e.get('level', 'unknown')}: {e.get('error', 'Unknown error')}" for e in errors]
+        )
+
+        prompt = f"""You are a Jesse trading strategy expert. Fix the following Python strategy code that has validation errors.
+
+STRATEGY NAME: {spec.get("name", "Unknown")}
+STRATEGY DESCRIPTION: {spec.get("description", "")}
+
+VALIDATION ERRORS:
+{error_summary}
+
+CURRENT CODE:
+```{code}
+```
+
+Instructions:
+1. Fix all validation errors
+2. Keep the same strategy name and indicators
+3. Implement proper trading logic (not just pass/return False)
+4. Use Jesse framework conventions (self.candles, ta.* indicators, etc.)
+5. Return ONLY the fixed Python code, no explanations
+
+Fix the code:"""
+
+        headers = {"Authorization": f"Bearer {LLM_API_KEY}", "Content-Type": "application/json"}
+
+        payload = {
+            "model": "sonar",
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 4000,
+        }
+
+        response = requests.post(
+            f"{LLM_ENDPOINT}/chat/completions", headers=headers, json=payload, timeout=60
+        )
+
+        if response.status_code == 200:
+            result = response.json()
+            fixed_code = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+
+            code_match = re.search(r"```python\n?(.*?)```", fixed_code, re.DOTALL)
+            if code_match:
+                return code_match.group(1).strip()
+
+            if "class " in fixed_code and "def should_long" in fixed_code:
+                return fixed_code.strip()
+
+        return None
+
+    def _fix_with_templates(self, code: str, errors: List[Dict], result: Dict[str, Any]) -> str:
+        """Fix validation errors using template-based approach."""
+        errors_by_level = {e.get("level"): e for e in errors}
+
+        if "syntax" in errors_by_level:
+            code = self._fix_syntax_errors(code, errors_by_level["syntax"])
+
+        if "imports" in errors_by_level:
+            code = self._fix_import_errors(code, errors_by_level["imports"])
+
+        if "structure" in errors_by_level:
+            code = self._fix_structure_errors(code, errors_by_level["structure"])
+
+        if "methods" in errors_by_level:
+            code = self._fix_method_errors(code, errors_by_level["methods"])
+
+        return code
+
+    def _fix_syntax_errors(self, code: str, error: Dict) -> str:
+        """Fix syntax errors."""
+        error_msg = error.get("error", "")
+        line = error.get("line", 0)
+
+        if "expected ':'" in error_msg.lower():
+            lines = code.split("\n")
+            for i, ln in enumerate(lines):
+                if "def " in ln or "if " in ln or "for " in ln or "while " in ln:
+                    if (
+                        ln.strip()
+                        and not ln.strip().endswith(":")
+                        and "#" not in ln.split("def ")[0]
+                    ):
+                        lines[i] = ln.rstrip() + ":"
+            code = "\n".join(lines)
+
+        return code
+
+    def _fix_import_errors(self, code: str, error: Dict) -> str:
+        """Fix import errors."""
+        if "from jesse.strategies import Strategy" not in code:
+            lines = code.split("\n")
+            new_lines = []
+            for line in lines:
+                new_lines.append(line)
+                if line.startswith("import ") or line.startswith("from "):
+                    new_lines.insert(-1, "from jesse.strategies import Strategy")
+                    break
+                if line.strip() == "" and not any(l.strip().startswith("from ") for l in new_lines):
+                    new_lines.insert(-1, "from jesse.strategies import Strategy")
+                    break
+            if "from jesse.strategies import Strategy" not in "\n".join(new_lines):
+                new_lines.insert(0, "from jesse.strategies import Strategy")
+            code = "\n".join(new_lines)
+        return code
+
+    def _fix_structure_errors(self, code: str, error: Dict) -> str:
+        """Fix structure errors."""
+        class_match = re.search(r"class\s+(\w+)\s*\([^)]*\):", code)
+        if class_match:
+            class_name = class_match.group(1)
+            code = re.sub(
+                r"class\s+" + class_name + r"\s*\([^)]*\):", f"class {class_name}(Strategy):", code
+            )
+        return code
+
+    def _fix_method_errors(self, code: str, error: Dict) -> str:
+        """Fix method errors."""
+        fix_hint = error.get("fix_hint", "")
+        if "should_long" in fix_hint and "def should_long" not in code:
+            code = self._add_method(code, "should_long", "return False")
+        if "should_short" in fix_hint and "def should_short" not in code:
+            code = self._add_method(code, "should_short", "return False")
+        if "go_long" in fix_hint and "def go_long" not in code:
+            code = self._add_method(code, "go_long", "pass")
+        if "go_short" in fix_hint and "def go_short" not in code:
+            code = self._add_method(code, "go_short", "pass")
+        return code
+
+    def _add_method(self, code: str, method_name: str, body: str) -> str:
+        """Add a method to the strategy class."""
+        indent = "    "
+        new_method = f"\n{indent}def {method_name}(self) -> bool:\n{indent}    {body}"
+
+        class_match = re.search(r"class\s+\w+\s*\(Strategy\):", code)
+        if class_match:
+            insert_pos = class_match.end()
+            code = code[:insert_pos] + new_method + code[insert_pos:]
         return code
 
     def _add_missing_methods(self, code: str, methods: List[str]) -> str:
@@ -451,6 +608,13 @@ class {spec.name}(Strategy):
             if errors:
                 logger.warning(f"Errors: {errors[:3]}...")
 
+            result["spec"] = {
+                "name": spec.name,
+                "description": spec.description,
+                "strategy_type": spec.strategy_type,
+                "indicators": spec.indicators,
+                "timeframe": spec.timeframe,
+            }
             current_code = self.refine_from_validation(current_code, result)
 
         if not success:
