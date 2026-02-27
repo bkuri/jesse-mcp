@@ -2,14 +2,17 @@
 """
 Jesse MCP Server - FastMCP Implementation
 
-Provides 18 tools for quantitative trading analysis:
+Provides 46 tools for quantitative trading analysis:
 - Phase 1: Backtesting (5 tools)
-- Phase 3: Optimization (4 tools) [formerly phase3]
-- Phase 4: Risk Analysis (4 tools) [formerly phase4]
-- Phase 5: Pairs Trading (5 tools) [formerly phase5]
+- Phase 3: Optimization (4 tools)
+- Phase 4: Risk Analysis (4 tools)
+- Phase 5: Pairs Trading (5 tools)
+- Phase 6: Live Trading (12 tools)
+- Strategy Creation (6 tools) - Ralph Wiggum Loop with progress tracking
 """
 
 import logging
+import threading
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
@@ -321,6 +324,448 @@ def strategy_validate(code: str) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Strategy validation failed: {e}")
         return {"error": str(e), "valid": False}
+
+
+# ==================== STRATEGY CREATION TOOLS (Ralph Wiggum Loop) ====================
+
+
+def _strategy_create_impl(
+    name: str,
+    description: str,
+    indicators: Optional[List[str]] = None,
+    strategy_type: str = "trend_following",
+    risk_per_trade: float = 0.02,
+    timeframe: str = "1h",
+    max_iterations: int = 5,
+    overwrite: bool = False,
+    progress_callback: Optional[Any] = None,
+) -> Dict[str, Any]:
+    """
+    Internal implementation for strategy creation with iterative refinement.
+    """
+    from jesse_mcp.core.job_manager import get_job_manager, JobStatus
+    from jesse_mcp.core.strategy_validator import get_validator
+    from jesse_mcp.core.strategy_builder import get_strategy_builder, StrategySpec
+    import os
+
+    try:
+        if jesse is None:
+            raise RuntimeError("Jesse framework not initialized")
+
+        strategies_path = getattr(jesse, "strategies_path", None)
+        if not strategies_path:
+            return {"error": "Strategies path not available", "status": "failed"}
+
+        strategy_dir = os.path.join(strategies_path, name)
+        strategy_file = os.path.join(strategy_dir, "__init__.py")
+
+        if os.path.exists(strategy_dir) and not overwrite:
+            return {
+                "error": f"Strategy '{name}' already exists. Use overwrite=True to replace.",
+                "status": "failed",
+                "name": name,
+            }
+
+        validator = get_validator()
+        builder = get_strategy_builder(validator)
+
+        spec = StrategySpec(
+            name=name,
+            description=description,
+            strategy_type=strategy_type,
+            indicators=indicators or [],
+            risk_per_trade=risk_per_trade,
+            timeframe=timeframe,
+        )
+
+        if progress_callback:
+            progress_callback(0.1, "Generating initial strategy code", 0)
+
+        code = builder.generate_initial(spec)
+
+        def internal_progress(pct: float, step: str, iteration: int):
+            if progress_callback:
+                progress_callback(0.1 + (pct * 0.8), step, iteration)
+
+        final_code, history, success = builder.refinement_loop(
+            code, spec, max_iter=max_iterations, progress_callback=internal_progress
+        )
+
+        if progress_callback:
+            progress_callback(0.95, "Saving strategy", max_iterations)
+
+        if success:
+            os.makedirs(strategy_dir, exist_ok=True)
+            with open(strategy_file, "w") as f:
+                f.write(final_code)
+            logger.info(f"✅ Strategy saved: {strategy_file}")
+
+        return {
+            "status": "created" if success else "validation_failed",
+            "name": name,
+            "iterations": len(history),
+            "validation_history": [
+                {"iteration": h["iteration"], "passed": h["result"].get("passed", False)}
+                for h in history
+            ],
+            "path": strategy_file if success else None,
+            "code": final_code,
+            "ready_for_backtest": success,
+        }
+
+    except Exception as e:
+        logger.error(f"Strategy creation failed: {e}")
+        return {"error": str(e), "error_type": type(e).__name__, "status": "failed"}
+
+
+@mcp.tool
+def strategy_create(
+    name: str,
+    description: str,
+    indicators: Optional[List[str]] = None,
+    strategy_type: str = "trend_following",
+    risk_per_trade: float = 0.02,
+    timeframe: str = "1h",
+    max_iterations: int = 5,
+    overwrite: bool = False,
+    async_mode: bool = False,
+) -> Dict[str, Any]:
+    """
+    Create strategy with iterative refinement (Ralph Wiggum loop).
+
+    If async_mode=True, creates a Job and returns job_id immediately.
+    Otherwise runs synchronously with progress logging.
+
+    Args:
+        name: Strategy name (used as class name)
+        description: Human-readable description of the strategy
+        indicators: List of technical indicators to use (optional)
+        strategy_type: Type classification (default: trend_following)
+        risk_per_trade: Risk percentage per trade (default: 0.02 = 2%)
+        timeframe: Primary trading timeframe (default: 1h)
+        max_iterations: Maximum refinement iterations (default: 5)
+        overwrite: Overwrite existing strategy (default: False)
+        async_mode: Run asynchronously (default: False)
+
+    Returns:
+        Dict with status, name, iterations, validation_history, path, code, ready_for_backtest
+    """
+    try:
+        if not async_mode:
+            return _strategy_create_impl(
+                name=name,
+                description=description,
+                indicators=indicators,
+                strategy_type=strategy_type,
+                risk_per_trade=risk_per_trade,
+                timeframe=timeframe,
+                max_iterations=max_iterations,
+                overwrite=overwrite,
+            )
+
+        from jesse_mcp.core.job_manager import get_job_manager
+
+        job_manager = get_job_manager()
+        job = job_manager.create_job(
+            "strategy_create",
+            {
+                "name": name,
+                "description": description,
+                "indicators": indicators,
+                "strategy_type": strategy_type,
+                "risk_per_trade": risk_per_trade,
+                "timeframe": timeframe,
+                "max_iterations": max_iterations,
+                "overwrite": overwrite,
+            },
+        )
+        job_id = job.id
+
+        def run_async():
+            def progress_callback(pct: float, step: str, iteration: int):
+                job_manager.update_progress(
+                    job_id,
+                    progress_percent=pct * 100,
+                    current_step=step,
+                    iterations_completed=iteration,
+                    iterations_total=max_iterations,
+                )
+
+            try:
+                result = _strategy_create_impl(
+                    name=name,
+                    description=description,
+                    indicators=indicators,
+                    strategy_type=strategy_type,
+                    risk_per_trade=risk_per_trade,
+                    timeframe=timeframe,
+                    max_iterations=max_iterations,
+                    overwrite=overwrite,
+                    progress_callback=progress_callback,
+                )
+                if "error" in result and result.get("status") == "failed":
+                    job_manager.fail_job(job_id, result["error"])
+                else:
+                    job_manager.complete_job(job_id, result)
+            except Exception as e:
+                job_manager.fail_job(job_id, str(e))
+
+        thread = threading.Thread(target=run_async, daemon=True)
+        thread.start()
+
+        return {"job_id": job_id, "status": "started", "async_mode": True}
+
+    except Exception as e:
+        logger.error(f"Strategy create failed: {e}")
+        return {"error": str(e), "error_type": type(e).__name__}
+
+
+@mcp.tool
+def strategy_create_status(job_id: str) -> Dict[str, Any]:
+    """
+    Poll async job progress for strategy creation.
+
+    Args:
+        job_id: Job identifier from strategy_create
+
+    Returns:
+        Dict with job_id, status, progress_percent, current_step,
+        iterations_completed, iterations_total, elapsed_seconds, result (when complete)
+    """
+    try:
+        from jesse_mcp.core.job_manager import get_job_manager
+
+        job_manager = get_job_manager()
+        job = job_manager.get_job(job_id)
+
+        if not job:
+            return {"error": f"Job not found: {job_id}", "job_id": job_id}
+
+        elapsed = None
+        if job.started_at:
+            elapsed = (datetime.now(timezone.utc) - job.started_at).total_seconds()
+
+        result = {
+            "job_id": job_id,
+            "status": job.status.value,
+            "progress_percent": job.progress_percent,
+            "current_step": job.current_step,
+            "iterations_completed": job.iterations_completed,
+            "iterations_total": job.iterations_total,
+            "elapsed_seconds": elapsed,
+        }
+
+        if job.status.value in ("complete", "failed", "cancelled"):
+            result["result"] = job.result
+            if job.error:
+                result["error"] = job.error
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Strategy create status failed: {e}")
+        return {"error": str(e), "job_id": job_id}
+
+
+@mcp.tool
+def strategy_create_cancel(job_id: str) -> Dict[str, Any]:
+    """
+    Cancel async strategy creation job.
+
+    Args:
+        job_id: Job identifier to cancel
+
+    Returns:
+        Dict with status, job_id
+    """
+    try:
+        from jesse_mcp.core.job_manager import get_job_manager
+
+        job_manager = get_job_manager()
+        cancelled = job_manager.cancel_job(job_id)
+
+        if cancelled:
+            return {"status": "cancelled", "job_id": job_id}
+        else:
+            return {
+                "status": "not_cancelled",
+                "job_id": job_id,
+                "reason": "Job not found or already complete",
+            }
+
+    except Exception as e:
+        logger.error(f"Strategy create cancel failed: {e}")
+        return {"error": str(e), "job_id": job_id}
+
+
+@mcp.tool
+def strategy_refine(
+    name: str,
+    feedback: str,
+    focus_area: str = "general",
+    max_iterations: int = 3,
+) -> Dict[str, Any]:
+    """
+    Refine existing strategy based on feedback.
+
+    Reads strategy, refines based on feedback, re-validates.
+
+    Args:
+        name: Strategy name to refine
+        feedback: Feedback/issues to address
+        focus_area: Area to focus refinement (default: general)
+        max_iterations: Maximum refinement iterations (default: 3)
+
+    Returns:
+        Dict with status, name, iterations, changes
+    """
+    try:
+        from jesse_mcp.core.strategy_validator import get_validator
+        from jesse_mcp.core.strategy_builder import get_strategy_builder
+        import os
+
+        if jesse is None:
+            raise RuntimeError("Jesse framework not initialized")
+
+        strategies_path = getattr(jesse, "strategies_path", None)
+        if not strategies_path:
+            return {"error": "Strategies path not available", "status": "failed"}
+
+        strategy_dir = os.path.join(strategies_path, name)
+        strategy_file = os.path.join(strategy_dir, "__init__.py")
+
+        if not os.path.exists(strategy_file):
+            return {"error": f"Strategy '{name}' not found", "status": "failed", "name": name}
+
+        with open(strategy_file, "r") as f:
+            current_code = f.read()
+
+        validator = get_validator()
+        builder = get_strategy_builder(validator)
+
+        spec = {
+            "name": name,
+            "description": f"Refined: {feedback}",
+            "strategy_type": focus_area,
+        }
+
+        changes = []
+        for iteration in range(max_iterations):
+            logger.info(f"Refinement iteration {iteration + 1}/{max_iterations}")
+
+            validation_result = validator.full_validation(current_code, spec)
+            changes.append(
+                {
+                    "iteration": iteration + 1,
+                    "validation_passed": validation_result.get("passed", False),
+                    "errors": validation_result.get("errors", [])[:3],
+                }
+            )
+
+            if validation_result.get("passed", False):
+                break
+
+            current_code = builder.refine_from_validation(current_code, validation_result)
+
+        with open(strategy_file, "w") as f:
+            f.write(current_code)
+
+        logger.info(f"✅ Strategy refined: {strategy_file}")
+
+        return {
+            "status": "refined",
+            "name": name,
+            "iterations": len(changes),
+            "changes": changes,
+            "path": strategy_file,
+        }
+
+    except Exception as e:
+        logger.error(f"Strategy refine failed: {e}")
+        return {"error": str(e), "error_type": type(e).__name__}
+
+
+@mcp.tool
+def strategy_delete(name: str, confirm: bool = False) -> Dict[str, Any]:
+    """
+    Delete a strategy.
+
+    Args:
+        name: Strategy name to delete
+        confirm: Must be True to actually delete (default: False)
+
+    Returns:
+        Dict with status, name
+    """
+    try:
+        import os
+        import shutil
+
+        if not confirm:
+            return {
+                "status": "confirmation_required",
+                "name": name,
+                "message": "Set confirm=True to delete the strategy",
+            }
+
+        if jesse is None:
+            raise RuntimeError("Jesse framework not initialized")
+
+        strategies_path = getattr(jesse, "strategies_path", None)
+        if not strategies_path:
+            return {"error": "Strategies path not available", "status": "failed"}
+
+        strategy_dir = os.path.join(strategies_path, name)
+
+        if not os.path.exists(strategy_dir):
+            return {"error": f"Strategy '{name}' not found", "status": "not_found", "name": name}
+
+        shutil.rmtree(strategy_dir)
+        logger.info(f"✅ Strategy deleted: {strategy_dir}")
+
+        return {"status": "deleted", "name": name}
+
+    except Exception as e:
+        logger.error(f"Strategy delete failed: {e}")
+        return {"error": str(e), "error_type": type(e).__name__}
+
+
+@mcp.tool
+def jobs_list(job_type: Optional[str] = None, limit: int = 50) -> Dict[str, Any]:
+    """
+    List recent jobs.
+
+    Args:
+        job_type: Filter by job type (optional)
+        limit: Maximum number of jobs to return (default: 50)
+
+    Returns:
+        Dict with list of jobs containing id, type, status, progress, current_step, started_at
+    """
+    try:
+        from jesse_mcp.core.job_manager import get_job_manager
+
+        job_manager = get_job_manager()
+        jobs = job_manager.list_jobs(job_type=job_type, limit=limit)
+
+        return {
+            "jobs": [
+                {
+                    "id": job.id,
+                    "type": job.type,
+                    "status": job.status.value,
+                    "progress": job.progress_percent,
+                    "current_step": job.current_step,
+                    "started_at": job.started_at.isoformat() if job.started_at else None,
+                }
+                for job in jobs
+            ],
+            "count": len(jobs),
+        }
+
+    except Exception as e:
+        logger.error(f"Jobs list failed: {e}")
+        return {"error": str(e), "jobs": []}
 
 
 @mcp.tool

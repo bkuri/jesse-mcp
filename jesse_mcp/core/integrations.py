@@ -7,6 +7,8 @@ Handles all interactions with Jesse to enable autonomous trading strategy operat
 
 import sys
 import os
+import re
+import shutil
 import logging
 from typing import Dict, Any, Optional
 import traceback
@@ -343,6 +345,117 @@ class JesseWrapper:
         except Exception as e:
             logger.error(f"❌ Validation failed: {e}")
             return {"error": str(e), "valid": False}
+
+    def _sanitize_strategy_name(self, name: str) -> tuple[bool, str]:
+        if not name:
+            return False, "Strategy name cannot be empty"
+        if len(name) > 50:
+            return False, "Strategy name must be 50 characters or less"
+        if not re.match(r"^[a-zA-Z][a-zA-Z0-9_]*$", name):
+            return (
+                False,
+                "Strategy name must start with a letter and contain only alphanumeric characters and underscores",
+            )
+        return True, name
+
+    def save_strategy(self, name: str, code: str, overwrite: bool = False) -> Dict[str, Any]:
+        try:
+            logger.info(f"Saving strategy: {name}")
+
+            if not self.strategies_path:
+                return {"success": False, "error": "Strategy path not available (using REST API)"}
+
+            valid, sanitized = self._sanitize_strategy_name(name)
+            if not valid:
+                return {"success": False, "error": sanitized}
+
+            strategy_dir = os.path.join(self.strategies_path, sanitized)
+            strategy_file = os.path.join(strategy_dir, "__init__.py")
+
+            real_strategies_path = os.path.realpath(self.strategies_path)
+            real_strategy_dir = os.path.realpath(strategy_dir)
+            if (
+                not real_strategy_dir.startswith(real_strategies_path + os.sep)
+                and real_strategy_dir != real_strategies_path
+            ):
+                return {"success": False, "error": "Invalid strategy path: path traversal detected"}
+
+            if os.path.exists(strategy_file) and not overwrite:
+                return {
+                    "success": False,
+                    "error": f"Strategy '{sanitized}' already exists. Use overwrite=True to replace.",
+                }
+
+            os.makedirs(strategy_dir, exist_ok=True)
+
+            with open(strategy_file, "w") as f:
+                f.write(code)
+
+            logger.info(f"✅ Saved strategy {sanitized} ({len(code)} bytes)")
+            return {
+                "success": True,
+                "name": sanitized,
+                "path": strategy_file,
+                "size_bytes": len(code),
+            }
+
+        except Exception as e:
+            logger.error(f"❌ Failed to save strategy {name}: {e}")
+            return {"success": False, "error": str(e)}
+
+    def delete_strategy(self, name: str) -> Dict[str, Any]:
+        try:
+            logger.info(f"Deleting strategy: {name}")
+
+            if not self.strategies_path:
+                return {"success": False, "error": "Strategy path not available (using REST API)"}
+
+            valid, sanitized = self._sanitize_strategy_name(name)
+            if not valid:
+                return {"success": False, "error": sanitized}
+
+            strategy_dir = os.path.join(self.strategies_path, sanitized)
+
+            real_strategies_path = os.path.realpath(self.strategies_path)
+            real_strategy_dir = os.path.realpath(strategy_dir)
+            if (
+                not real_strategy_dir.startswith(real_strategies_path + os.sep)
+                and real_strategy_dir != real_strategies_path
+            ):
+                return {"success": False, "error": "Invalid strategy path: path traversal detected"}
+
+            if not os.path.exists(strategy_dir):
+                return {"success": False, "error": f"Strategy '{sanitized}' does not exist"}
+
+            shutil.rmtree(strategy_dir)
+
+            logger.info(f"✅ Deleted strategy {sanitized}")
+            return {"success": True, "name": sanitized}
+
+        except Exception as e:
+            logger.error(f"❌ Failed to delete strategy {name}: {e}")
+            return {"success": False, "error": str(e)}
+
+    def strategy_exists(self, name: str) -> bool:
+        try:
+            if not self.strategies_path:
+                return False
+
+            valid, sanitized = self._sanitize_strategy_name(name)
+            if not valid:
+                return False
+
+            strategy_file = os.path.join(self.strategies_path, sanitized, "__init__.py")
+
+            real_strategies_path = os.path.realpath(self.strategies_path)
+            real_strategy_file = os.path.realpath(strategy_file)
+            if not real_strategy_file.startswith(real_strategies_path + os.sep):
+                return False
+
+            return os.path.exists(strategy_file)
+
+        except Exception:
+            return False
 
     def import_candles(
         self,

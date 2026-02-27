@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Jesse MCP is a Model Context Protocol (MCP) server exposing Jesse's algorithmic trading framework capabilities to LLM agents. It provides 17 tools across 5 phases: backtesting, optimization, risk analysis, pairs trading, and data management.
+Jesse MCP is a Model Context Protocol (MCP) server exposing Jesse's algorithmic trading framework capabilities to LLM agents. It provides 46 tools across 6 phases: backtesting, optimization, risk analysis, pairs trading, live trading, and strategy creation.
 
 ## Agent Persona
 
@@ -555,6 +555,78 @@ JESSE_MAX_DRAWDOWN=0.15                # Max 15% drawdown
 JESSE_REQUIRE_CONFIRMATION=true        # Require confirmation phrase
 JESSE_AUTO_STOP_ON_LOSS=true           # Auto-stop on max loss
 ```
+
+## Strategy Creation (Phase 7)
+
+Jesse MCP supports autonomous strategy creation with iterative refinement - the "Ralph Wiggum Loop".
+
+### MCP Tools
+
+| Tool | Purpose | Mode |
+|------|---------|------|
+| `strategy_create` | Create strategy with iterative validation | Safe |
+| `strategy_create_status` | Poll async job progress | Safe |
+| `strategy_create_cancel` | Cancel in-progress creation | Safe |
+| `strategy_refine` | Refine existing strategy | Safe |
+| `strategy_delete` | Delete strategy (requires confirm) | Safe |
+| `jobs_list` | List recent async jobs | Safe |
+
+### Multi-Level Validation Pipeline
+
+1. **Syntax** - Python syntax validity via `compile()`
+2. **Imports** - Required Jesse imports present
+3. **Structure** - Class inherits from Strategy
+4. **Methods** - Required methods defined (should_long, go_long, etc.)
+5. **Indicators** - Known Jesse indicators used
+6. **Dry-run** - Quick backtest validation (catches runtime errors)
+
+### Async Mode with Progress Tracking
+
+For long-running operations, use async mode:
+
+```python
+# Start async creation
+result = await client.call_tool("strategy_create", {
+    "name": "MyStrategy",
+    "description": "Trend following with EMA crossover",
+    "async_mode": True
+})
+job_id = result["job_id"]
+
+# Poll progress
+status = await client.call_tool("strategy_create_status", {"job_id": job_id})
+# Returns: {"progress_percent": 60, "current_step": "Validation iteration 3/5", ...}
+```
+
+### Example Usage
+
+```python
+# Synchronous creation (blocks until complete)
+result = await client.call_tool("strategy_create", {
+    "name": "EMACrossover",
+    "description": "EMA crossover trend following strategy",
+    "indicators": ["ema", "rsi", "atr"],
+    "strategy_type": "trend_following",
+    "risk_per_trade": 0.02,
+    "max_iterations": 5,
+    "overwrite": False
+})
+
+if result["ready_for_backtest"]:
+    # Strategy is ready - run backtest
+    backtest = await client.call_tool("backtest", {
+        "strategy": "EMACrossover",
+        "symbol": "BTC-USDT",
+        ...
+    })
+```
+
+### Safety Mechanisms
+
+1. **Overwrite Protection** - Requires `overwrite=True` to replace existing strategies
+2. **Path Sanitization** - Strategy names must be valid Python identifiers
+3. **Path Traversal Prevention** - Cannot write outside strategies directory
+4. **Delete Confirmation** - `strategy_delete` requires `confirm=True`
 
 ## Landing the Plane (Session Completion)
 
