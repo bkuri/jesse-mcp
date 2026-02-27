@@ -480,7 +480,7 @@ Fix the code:"""
         max_iter: int = 5,
         progress_callback: Optional[Callable[[float, str, int], None]] = None,
     ) -> Tuple[str, List[Dict[str, Any]], bool]:
-        """Run iterative refinement loop until validation passes or max iterations."""
+        """Run iterative refinement loop with validation + improvement using jessegpt.md."""
         logger.info(f"Starting refinement loop (max {max_iter} iterations)")
 
         history: List[Dict[str, Any]] = []
@@ -510,8 +510,17 @@ Fix the code:"""
             )
 
             if result.get("passed", False):
-                success = True
                 logger.info(f"✅ Validation passed at iteration {iteration + 1}")
+
+                if LLM_ENDPOINT and LLM_API_KEY and iteration < max_iter - 1:
+                    logger.info(f"🔧 Checking for improvements using jessegpt.md knowledge...")
+                    improved_code = self._improve_with_llm(current_code, spec)
+                    if improved_code and improved_code != current_code:
+                        logger.info("✅ Improvements found, re-validating...")
+                        current_code = improved_code
+                        continue
+
+                success = True
                 break
 
             logger.warning(f"❌ Validation failed at iteration {iteration + 1}")
@@ -533,6 +542,83 @@ Fix the code:"""
             logger.error(f"❌ Refinement loop exhausted after {max_iter} iterations")
 
         return current_code, history, success
+
+    def _improve_with_llm(self, code: str, spec: StrategySpec) -> Optional[str]:
+        """Use jessegpt.md knowledge to improve the strategy."""
+        import requests
+
+        jessegpt_guidelines = """
+You are a Jesse trading strategy expert with deep knowledge of the Jesse framework.
+
+Jesse Best Practices from jessegpt.md:
+1. Use utils.risk_to_qty() for proper position sizing based on risk percentage
+2. Use ta.sma, ta.ema, ta.rsi, ta.atr etc. for technical indicators
+3. In before(), store previous values using instance variables to detect crossovers
+4. Implement proper stop-loss and take-profit in on_open_position()
+5. Use self.balance for capital, self.price for current price
+6. For entry: self.buy = qty, price or self.sell = qty, price
+7. For exit: self.stop_loss = qty, price and self.take_profit = qty, price
+8. Use should_cancel_entry() to cancel pending orders after timeout
+9. Use ATR for dynamic stop-loss sizing
+10. Consider market regime (trending vs ranging) in entry logic
+11. Add filters to reduce false signals (volume, volatility, etc.)
+12. Use on_close_position() for trailing stops or position management
+"""
+
+        prompt = f"""You are reviewing a generated Jesse trading strategy. Using Jesse best practices (from jessegpt.md below), analyze if this strategy can be improved.
+
+STRATEGY NAME: {spec.name}
+STRATEGY TYPE: {spec.strategy_type}
+DESCRIPTION: {spec.description}
+
+JESSE BEST PRACTICES:
+{jessegpt_guidelines}
+
+CURRENT STRATEGY CODE:
+```{code}
+```
+
+Instructions:
+1. Analyze if the strategy follows Jesse best practices
+2. If improvements are needed, provide the improved code
+3. Focus on: position sizing, stop-loss/take-profit, crossover detection, filters, edge cases
+4. If no improvements needed, return "NO_IMPROVEMENTS_NEEDED"
+5. Return ONLY the improved code (or "NO_IMPROVEMENTS_NEEDED"), no explanations
+
+Improve the strategy:"""
+
+        try:
+            headers = {"Authorization": f"Bearer {LLM_API_KEY}", "Content-Type": "application/json"}
+
+            payload = {
+                "model": "sonar",
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 4000,
+            }
+
+            response = requests.post(
+                f"{LLM_ENDPOINT}/chat/completions", headers=headers, json=payload, timeout=60
+            )
+
+            if response.status_code == 200:
+                result = response.json()
+                improved_code = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+
+                if "NO_IMPROVEMENTS_NEEDED" in improved_code:
+                    logger.info("LLM: No improvements needed")
+                    return None
+
+                code_match = re.search(r"```python\n?(.*?)```", improved_code, re.DOTALL)
+                if code_match:
+                    return code_match.group(1).strip()
+
+                if "class " in improved_code and "def should_long" in improved_code:
+                    return improved_code.strip()
+
+        except Exception as e:
+            logger.warning(f"LLM improvement failed: {e}")
+
+        return None
 
 
 def get_strategy_builder(validator: Optional["StrategyValidator"] = None) -> StrategyBuilder:
