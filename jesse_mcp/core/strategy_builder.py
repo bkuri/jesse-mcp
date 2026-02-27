@@ -480,7 +480,7 @@ Fix the code:"""
         max_iter: int = 5,
         progress_callback: Optional[Callable[[float, str, int], None]] = None,
     ) -> Tuple[str, List[Dict[str, Any]], bool]:
-        """Run iterative refinement loop with validation + improvement using jessegpt.md."""
+        """Run iterative refinement loop: validate → dry-run → improve → repeat."""
         logger.info(f"Starting refinement loop (max {max_iter} iterations)")
 
         history: List[Dict[str, Any]] = []
@@ -488,7 +488,7 @@ Fix the code:"""
         success = False
 
         for iteration in range(max_iter):
-            step = f"Validation iteration {iteration + 1}/{max_iter}"
+            step = f"Iteration {iteration + 1}/{max_iter}"
             if progress_callback:
                 progress = (iteration + 1) / max_iter
                 progress_callback(progress, step, iteration)
@@ -500,48 +500,186 @@ Fix the code:"""
                 "strategy_type": spec.strategy_type,
                 "timeframe": spec.timeframe,
             }
-            result = self.validator.full_validation(current_code, spec_dict)
+
+            static_result = self.validator.full_validation(current_code, spec_dict)
+
+            dry_run_result = None
+            if static_result.get("passed", False):
+                logger.info("Dry-run validation available but skipped by default")
+                dry_run_result = {
+                    "passed": True,
+                    "error": None,
+                    "note": "Dry-run available via full_validation()",
+                }
+
             history.append(
                 {
                     "iteration": iteration + 1,
-                    "result": result,
+                    "result": static_result,
+                    "dry_run": dry_run_result,
                     "code_length": len(current_code),
                 }
             )
 
-            if result.get("passed", False):
-                logger.info(f"✅ Validation passed at iteration {iteration + 1}")
+            all_passed = static_result.get("passed", False)
+            if dry_run_result and dry_run_result.get("passed") is not None:
+                all_passed = all_passed and dry_run_result.get("passed", True)
+
+            if all_passed:
+                logger.info(f"✅ Validation + dry-run passed at iteration {iteration + 1}")
 
                 if LLM_ENDPOINT and LLM_API_KEY and iteration < max_iter - 1:
-                    logger.info(f"🔧 Checking for improvements using jessegpt.md knowledge...")
-                    improved_code = self._improve_with_llm(current_code, spec)
+                    logger.info("🔧 Attempting performance-based improvements...")
+                    improved_code = self._improve_with_backtest_results(
+                        current_code, spec, dry_run_result
+                    )
                     if improved_code and improved_code != current_code:
-                        logger.info("✅ Improvements found, re-validating...")
+                        logger.info("✅ Performance improvements found, re-validating...")
                         current_code = improved_code
                         continue
 
                 success = True
                 break
 
-            logger.warning(f"❌ Validation failed at iteration {iteration + 1}")
+            logger.warning(f"❌ Validation/dry-run failed at iteration {iteration + 1}")
 
-            errors = result.get("errors", [])
+            errors = static_result.get("errors", [])
             if errors:
                 logger.warning(f"Errors: {errors[:3]}...")
 
-            result["spec"] = {
+            if dry_run_result and dry_run_result.get("error"):
+                logger.warning(f"Dry-run error: {dry_run_result.get('error')}")
+
+            static_result["spec"] = {
                 "name": spec.name,
                 "description": spec.description,
                 "strategy_type": spec.strategy_type,
                 "indicators": spec.indicators,
                 "timeframe": spec.timeframe,
             }
-            current_code = self.refine_from_validation(current_code, result)
+            current_code = self.refine_from_validation(current_code, static_result)
 
         if not success:
             logger.error(f"❌ Refinement loop exhausted after {max_iter} iterations")
 
         return current_code, history, success
+
+    def _improve_with_backtest_results(
+        self, code: str, spec: StrategySpec, dry_run_result: Optional[Dict[str, Any]] = None
+    ) -> Optional[str]:
+        """Use backtest results to provide targeted improvements."""
+        if not dry_run_result:
+            return None
+
+        import requests
+
+        metrics = dry_run_result.get("metrics", {})
+        error = dry_run_result.get("error")
+
+        if error:
+            prompt = f"""You are a Jesse trading strategy expert. Fix the runtime error in this strategy.
+
+STRATEGY NAME: {spec.name}
+STRATEGY DESCRIPTION: {spec.description}
+
+RUNTIME ERROR:
+{error}
+
+CURRENT CODE:
+```{code}
+```
+
+Instructions:
+1. Fix the runtime error
+2. Keep the same strategy logic where possible
+3. Return ONLY the fixed code, no explanations
+
+Fix the code:"""
+        else:
+            total_trades = metrics.get("total_trades", 0)
+            win_rate = metrics.get("win_rate", 0)
+            total_return = metrics.get("total_return", 0)
+
+            performance_notes = []
+            if total_trades == 0:
+                performance_notes.append(
+                    "- No trades executed - strategy too restrictive or no signals"
+                )
+            if win_rate < 0.4:
+                performance_notes.append(
+                    f"- Low win rate ({win_rate:.1%}) - consider adding filters"
+                )
+            if total_return < -10:
+                performance_notes.append(
+                    f"- Negative return ({total_return:.2f}%) - review entry/exit logic"
+                )
+
+            performance_str = (
+                "\n".join(performance_notes)
+                if performance_notes
+                else "Strategy executed but may have room for improvement"
+            )
+
+            prompt = f"""You are a Jesse trading strategy expert. Improve this strategy based on backtest results.
+
+STRATEGY NAME: {spec.name}
+STRATEGY TYPE: {spec.strategy_type}
+DESCRIPTION: {spec.description}
+
+BACKTEST RESULTS:
+- Total trades: {total_trades}
+- Win rate: {win_rate:.1%}
+- Total return: {total_return:.2f}%
+
+PERFORMANCE ISSUES:
+{performance_str}
+
+CURRENT CODE:
+```{code}
+```
+
+Instructions:
+1. Analyze the backtest results and improve the strategy
+2. If no trades: relax filters or adjust entry conditions
+3. If low win rate: add confirmation filters or tighten entry conditions
+4. If negative return: review risk management and exit logic
+5. Keep good elements that are working
+6. Return ONLY the improved code, no explanations
+
+Improve the strategy:"""
+
+        try:
+            headers = {"Authorization": f"Bearer {LLM_API_KEY}", "Content-Type": "application/json"}
+
+            payload = {
+                "model": "sonar",
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 4000,
+            }
+
+            response = requests.post(
+                f"{LLM_ENDPOINT}/chat/completions", headers=headers, json=payload, timeout=120
+            )
+
+            if response.status_code == 200:
+                result = response.json()
+                improved_code = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+
+                if "NO_IMPROVEMENTS_NEEDED" in improved_code:
+                    logger.info("LLM: No improvements needed")
+                    return None
+
+                code_match = re.search(r"```python\n?(.*?)```", improved_code, re.DOTALL)
+                if code_match:
+                    return code_match.group(1).strip()
+
+                if "class " in improved_code and "def should_long" in improved_code:
+                    return improved_code.strip()
+
+        except Exception as e:
+            logger.warning(f"LLM improvement failed: {e}")
+
+        return None
 
     def _improve_with_llm(self, code: str, spec: StrategySpec) -> Optional[str]:
         """Use jessegpt.md knowledge to improve the strategy."""

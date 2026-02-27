@@ -32,6 +32,7 @@ class ValidationResult:
     line: Optional[int] = None
     fix_hint: Optional[str] = None
     warnings: List[str] = field(default_factory=list)
+    metrics: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         result = {
@@ -43,6 +44,8 @@ class ValidationResult:
         }
         if self.warnings:
             result["warnings"] = self.warnings
+        if self.metrics:
+            result["metrics"] = self.metrics
         return result
 
 
@@ -475,24 +478,178 @@ class StrategyValidator:
 
     def dry_run_backtest(self, code: str, spec: Dict[str, Any]) -> ValidationResult:
         """
-        Placeholder for dry-run backtest validation.
-
-        This method will integrate with Jesse's backtest engine to perform
-        a quick validation run of the strategy.
+        Run a quick dry-run backtest to catch runtime errors.
 
         Args:
             code: Strategy source code
             spec: Backtest specification (symbol, timeframe, date range, etc.)
 
         Returns:
-            ValidationResult with dry-run status
+            ValidationResult with dry-run status and metrics
         """
-        logger.info("⚠️ Dry-run backtest not yet implemented")
-        return ValidationResult(
-            passed=True,
-            level=ValidationLevel.DRY_RUN.value,
-            warnings=["Dry-run backtest validation not yet implemented"],
-        )
+        try:
+            import os
+            import uuid
+
+            from jesse_mcp.core.integrations import (
+                JESSE_AVAILABLE,
+                JESSE_RESEARCH_AVAILABLE,
+                JESSE_PATH,
+            )
+        except Exception as e:
+            logger.warning(f"Cannot import for dry-run: {e}")
+            return ValidationResult(
+                passed=True,
+                level=ValidationLevel.DRY_RUN.value,
+                warnings=["Import error - skipping dry-run"],
+            )
+
+        if not JESSE_AVAILABLE:
+            logger.warning("Jesse not available for dry-run backtest")
+            return ValidationResult(
+                passed=True,
+                level=ValidationLevel.DRY_RUN.value,
+                warnings=["Jesse not available - skipping dry-run"],
+            )
+
+        if not JESSE_RESEARCH_AVAILABLE:
+            logger.warning("Jesse research module not available for dry-run backtest")
+            return ValidationResult(
+                passed=True,
+                level=ValidationLevel.DRY_RUN.value,
+                warnings=["Jesse research module not available - skipping dry-run"],
+            )
+
+        strategy_name = spec.get("name", f"DryRun_{uuid.uuid4().hex[:8]}")
+        symbol = spec.get("symbol", "BTC-USDT")
+        timeframe = spec.get("timeframe", "1h")
+        exchange = spec.get("exchange", "Binance")
+
+        temp_strategy_dir = None
+        try:
+            if not JESSE_PATH:
+                return ValidationResult(
+                    passed=False,
+                    level=ValidationLevel.DRY_RUN.value,
+                    error="No Jesse path available for dry-run",
+                )
+
+            strategies_path = os.path.join(JESSE_PATH, "strategies")
+            temp_strategy_dir = os.path.join(strategies_path, f"_temp_{strategy_name}")
+            os.makedirs(temp_strategy_dir, exist_ok=True)
+
+            strategy_file = os.path.join(temp_strategy_dir, "__init__.py")
+            with open(strategy_file, "w") as f:
+                f.write(code)
+
+            import jesse.helpers as jh
+            from jesse import research
+
+            start_date = "2024-01-01"
+            end_date = "2024-01-10"
+            start_ts = jh.arrow_to_timestamp(start_date)
+            end_ts = jh.arrow_to_timestamp(end_date)
+
+            candles, warmup = research.get_candles(
+                exchange=exchange,
+                symbol=symbol,
+                timeframe=timeframe,
+                start_date_timestamp=start_ts,
+                finish_date_timestamp=end_ts,
+                warmup_candles_num=240,
+            )
+
+            if candles is None or len(candles) == 0:
+                return ValidationResult(
+                    passed=False,
+                    level=ValidationLevel.DRY_RUN.value,
+                    error=f"No candle data available for {symbol}",
+                )
+
+            config = {
+                "starting_balance": 10000,
+                "fee": 0.001,
+                "type": "futures",
+                "futures_leverage": 1,
+                "futures_leverage_mode": "cross",
+                "exchange": exchange,
+                "warm_up_candles": 240,
+            }
+
+            routes = [
+                {
+                    "exchange": exchange,
+                    "strategy": strategy_name,
+                    "symbol": symbol,
+                    "timeframe": timeframe,
+                }
+            ]
+
+            result = research.backtest(
+                config=config,
+                routes=routes,
+                data_routes=[],
+                candles={
+                    f"{exchange}-{symbol}": {
+                        "exchange": exchange,
+                        "symbol": symbol,
+                        "candles": candles,
+                    }
+                },
+                generate_equity_curve=False,
+                generate_trades=True,
+                generate_logs=False,
+                hyperparameters=None,
+                fast_mode=True,
+            )
+
+            if "error" in result:
+                return ValidationResult(
+                    passed=False,
+                    level=ValidationLevel.DRY_RUN.value,
+                    error=f"Backtest error: {result.get('error', 'Unknown error')}",
+                )
+
+            metrics = result.get("metrics", {})
+            total_trades = metrics.get("total_trades", 0)
+            win_rate = metrics.get("win_rate", 0)
+            total_return = metrics.get("total_return", 0)
+
+            logger.info(
+                f"✅ Dry-run complete: {total_trades} trades, {win_rate:.1%} win rate, {total_return:.2f}% return"
+            )
+
+            return ValidationResult(
+                passed=True,
+                level=ValidationLevel.DRY_RUN.value,
+                warnings=[
+                    f"Dry-run: {total_trades} trades, {win_rate:.1%} win rate, {total_return:.2f}% return"
+                ],
+                metrics={
+                    "total_trades": total_trades,
+                    "win_rate": win_rate,
+                    "total_return": total_return,
+                },
+            )
+
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(f"❌ Dry-run backtest failed: {error_msg}")
+            return ValidationResult(
+                passed=False,
+                level=ValidationLevel.DRY_RUN.value,
+                error=f"Runtime error: {error_msg}",
+            )
+
+        finally:
+            if temp_strategy_dir and os.path.exists(temp_strategy_dir):
+                import shutil
+
+                try:
+                    shutil.rmtree(temp_strategy_dir)
+                    logger.info(f"Cleaned up temp strategy: {temp_strategy_dir}")
+                except Exception as e:
+                    logger.warning(f"Failed to cleanup temp strategy: {e}")
 
     def full_validation(self, code: str, spec: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
