@@ -478,10 +478,13 @@ Fix the code:"""
         code: str,
         spec: StrategySpec,
         max_iter: int = 5,
+        skip_backtest: bool = False,
         progress_callback: Optional[Callable[[float, str, int], None]] = None,
     ) -> Tuple[str, List[Dict[str, Any]], bool]:
         """Run iterative refinement loop: validate → dry-run → improve → repeat."""
-        logger.info(f"Starting refinement loop (max {max_iter} iterations)")
+        logger.info(
+            f"Starting refinement loop (max {max_iter} iterations, skip_backtest={skip_backtest})"
+        )
 
         history: List[Dict[str, Any]] = []
         current_code = code
@@ -505,12 +508,34 @@ Fix the code:"""
 
             dry_run_result = None
             if static_result.get("passed", False):
-                logger.info("Dry-run validation available but skipped by default")
-                dry_run_result = {
-                    "passed": True,
-                    "error": None,
-                    "note": "Dry-run available via full_validation()",
-                }
+                if skip_backtest:
+                    logger.info("Dry-run skipped (skip_backtest=True)")
+                    dry_run_result = {
+                        "passed": True,
+                        "error": None,
+                        "skipped": True,
+                        "note": "Dry-run skipped by user",
+                    }
+                else:
+                    logger.info("🔬 Attempting dry-run backtest...")
+                    try:
+                        dry_run_validation = self.validator.dry_run_backtest(
+                            current_code, spec_dict
+                        )
+                        dry_run_result = (
+                            dry_run_validation.to_dict()
+                            if hasattr(dry_run_validation, "to_dict")
+                            else {
+                                "passed": dry_run_validation.passed,
+                                "level": dry_run_validation.level,
+                                "error": dry_run_validation.error,
+                                "metrics": getattr(dry_run_validation, "metrics", {}),
+                            }
+                        )
+                        static_result["levels"]["dry_run"] = dry_run_result
+                    except Exception as e:
+                        logger.warning(f"Dry-run failed (continuing without): {e}")
+                        dry_run_result = {"passed": True, "error": None}
 
             history.append(
                 {

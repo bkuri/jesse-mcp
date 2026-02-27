@@ -338,6 +338,7 @@ def _strategy_create_impl(
     timeframe: str = "1h",
     max_iterations: int = 5,
     overwrite: bool = False,
+    skip_backtest: bool = False,
     progress_callback: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """
@@ -388,7 +389,11 @@ def _strategy_create_impl(
                 progress_callback(0.1 + (pct * 0.8), step, iteration)
 
         final_code, history, success = builder.refinement_loop(
-            code, spec, max_iter=max_iterations, progress_callback=internal_progress
+            code,
+            spec,
+            max_iter=max_iterations,
+            skip_backtest=skip_backtest,
+            progress_callback=internal_progress,
         )
 
         if progress_callback:
@@ -429,6 +434,7 @@ def strategy_create(
     max_iterations: int = 5,
     overwrite: bool = False,
     async_mode: bool = False,
+    skip_backtest: bool = False,
 ) -> Dict[str, Any]:
     """
     Create strategy with iterative refinement (Ralph Wiggum loop).
@@ -446,6 +452,7 @@ def strategy_create(
         max_iterations: Maximum refinement iterations (default: 5)
         overwrite: Overwrite existing strategy (default: False)
         async_mode: Run asynchronously (default: False)
+        skip_backtest: Skip dry-run backtest validation (default: False)
 
     Returns:
         Dict with status, name, iterations, validation_history, path, code, ready_for_backtest
@@ -461,6 +468,7 @@ def strategy_create(
                 timeframe=timeframe,
                 max_iterations=max_iterations,
                 overwrite=overwrite,
+                skip_backtest=skip_backtest,
             )
 
         from jesse_mcp.core.job_manager import get_job_manager
@@ -477,6 +485,7 @@ def strategy_create(
                 "timeframe": timeframe,
                 "max_iterations": max_iterations,
                 "overwrite": overwrite,
+                "skip_backtest": skip_backtest,
             },
         )
         job_id = job.id
@@ -501,6 +510,7 @@ def strategy_create(
                     timeframe=timeframe,
                     max_iterations=max_iterations,
                     overwrite=overwrite,
+                    skip_backtest=skip_backtest,
                     progress_callback=progress_callback,
                 )
                 if "error" in result and result.get("status") == "failed":

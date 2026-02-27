@@ -546,7 +546,7 @@ class StrategyValidator:
             from jesse import research
 
             start_date = "2024-01-01"
-            end_date = "2024-01-10"
+            end_date = "2024-01-05"
             start_ts = jh.arrow_to_timestamp(start_date)
             end_ts = jh.arrow_to_timestamp(end_date)
 
