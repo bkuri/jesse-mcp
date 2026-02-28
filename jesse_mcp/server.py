@@ -1488,6 +1488,24 @@ def live_start_paper_trading(
 
         logger.info(PAPER_TRADING_INFO)
 
+        _initialize_dependencies()
+        import os
+
+        if jesse is None:
+            return {"error": "Jesse framework not initialized"}
+
+        strategies_path = getattr(jesse, "strategies_path", None)
+        if not strategies_path:
+            return {"error": "Strategies path not available"}
+
+        metadata = load_metadata(strategy, strategies_path)
+        is_certified = metadata is not None and metadata.certified_at is not None
+        if not is_certified:
+            logger.warning(
+                f"⚠️  Paper trading with uncertified strategy '{strategy}'. "
+                f"Recommend testing with backtests first."
+            )
+
         client = get_jesse_rest_client()
         result = client.start_live_session(
             strategy=strategy,
@@ -1500,6 +1518,10 @@ def live_start_paper_trading(
             debug_mode=debug_mode,
         )
         result["mode"] = "paper"
+        if not is_certified:
+            result["warning"] = (
+                f"Strategy '{strategy}' is not certified. Backtest recommended first."
+            )
         return result
     except Exception as e:
         logger.error(f"Paper trading start failed: {e}")
@@ -1563,6 +1585,39 @@ def live_start_live_trading(
             return {
                 "error": f"Invalid confirmation. Required: '{config.confirmation_phrase}'",
                 "warning": LIVE_TRADING_WARNING,
+            }
+
+        _initialize_dependencies()
+        import os
+
+        if jesse is None:
+            return {"error": "Jesse framework not initialized", "status": "failed"}
+
+        strategies_path = getattr(jesse, "strategies_path", None)
+        if not strategies_path:
+            return {"error": "Strategies path not available", "status": "failed"}
+
+        metadata = load_metadata(strategy, strategies_path)
+        is_certified = metadata is not None and metadata.certified_at is not None
+        if not is_certified:
+            return {
+                "error": f"Cannot start live trading: Strategy '{strategy}' is not certified",
+                "status": "blocked",
+                "reason": "uncertified_strategy",
+                "recommendation": "Run backtests and achieve 70% pass rate over 10 tests to certify",
+                "metadata": (
+                    {
+                        "test_count": metadata.test_count,
+                        "test_pass_count": metadata.test_pass_count,
+                        "pass_rate": (
+                            metadata.test_pass_count / metadata.test_count
+                            if metadata.test_count > 0
+                            else 0
+                        ),
+                    }
+                    if metadata
+                    else None
+                ),
             }
 
         try:
