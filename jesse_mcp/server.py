@@ -17,6 +17,14 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from fastmcp import FastMCP
+
+from jesse_mcp.core.strategy_validation.metadata import (
+    get_or_create_metadata,
+    save_metadata,
+    load_metadata,
+    CERTIFICATION_MIN_TESTS,
+    CERTIFICATION_PASS_RATE,
+)
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
@@ -370,6 +378,8 @@ def _strategy_create_impl(
         validator = get_validator()
         builder = get_strategy_builder(validator)
 
+        metadata = get_or_create_metadata(name, strategies_path)
+
         spec = StrategySpec(
             name=name,
             description=description,
@@ -396,6 +406,17 @@ def _strategy_create_impl(
             progress_callback=internal_progress,
         )
 
+        for h in history:
+            dry_run = h.get("dry_run", {})
+            if dry_run and not dry_run.get("skipped"):
+                passed = dry_run.get("passed", False)
+                metadata.record_test(passed)
+                save_metadata(metadata, strategies_path)
+
+        if metadata.should_certify():
+            metadata.certify()
+            save_metadata(metadata, strategies_path)
+
         if progress_callback:
             progress_callback(0.95, "Saving strategy", max_iterations)
 
@@ -408,6 +429,10 @@ def _strategy_create_impl(
         return {
             "status": "created" if success else "validation_failed",
             "name": name,
+            "version": metadata.version,
+            "test_count": metadata.test_count,
+            "test_pass_count": metadata.test_pass_count,
+            "certified": metadata.certified_at is not None,
             "iterations": len(history),
             "validation_history": [
                 {"iteration": h["iteration"], "passed": h["result"].get("passed", False)}
@@ -776,6 +801,56 @@ def jobs_list(job_type: Optional[str] = None, limit: int = 50) -> Dict[str, Any]
     except Exception as e:
         logger.error(f"Jobs list failed: {e}")
         return {"error": str(e), "jobs": []}
+
+
+@mcp.tool
+def strategy_metadata(name: str) -> Dict[str, Any]:
+    """
+    Get metadata and version info for a strategy.
+
+    Args:
+        name: Strategy name
+
+    Returns:
+        Dict with strategy metadata including version, test_count, test_pass_count,
+        certified status, and certification thresholds
+    """
+    try:
+        import os
+
+        if jesse is None:
+            raise RuntimeError("Jesse framework not initialized")
+
+        strategies_path = getattr(jesse, "strategies_path", None)
+        if not strategies_path:
+            return {"error": "Strategies path not available", "status": "failed"}
+
+        strategy_dir = os.path.join(strategies_path, name)
+        if not os.path.exists(strategy_dir):
+            return {"error": f"Strategy '{name}' not found", "status": "not_found", "name": name}
+
+        metadata = load_metadata(name, strategies_path)
+        if metadata is None:
+            return {
+                "error": f"Metadata not found for strategy '{name}'",
+                "status": "not_found",
+                "name": name,
+            }
+
+        result = metadata.to_dict()
+        result["certification_requirements"] = {
+            "min_tests": CERTIFICATION_MIN_TESTS,
+            "pass_rate": CERTIFICATION_PASS_RATE,
+            "current_pass_rate": (
+                metadata.test_pass_count / metadata.test_count if metadata.test_count > 0 else 0
+            ),
+        }
+        result["status"] = "found"
+        return result
+
+    except Exception as e:
+        logger.error(f"Strategy metadata failed: {e}")
+        return {"error": str(e), "error_type": type(e).__name__}
 
 
 @mcp.tool
