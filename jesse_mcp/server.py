@@ -398,6 +398,11 @@ def _strategy_create_impl(
             if progress_callback:
                 progress_callback(0.1 + (pct * 0.8), step, iteration)
 
+        os.makedirs(strategy_dir, exist_ok=True)
+        with open(strategy_file, "w") as f:
+            f.write(code)
+        logger.info(f"✅ Strategy saved: {strategy_file}")
+
         final_code, history, success = builder.refinement_loop(
             code,
             spec,
@@ -418,13 +423,12 @@ def _strategy_create_impl(
             save_metadata(metadata, strategies_path)
 
         if progress_callback:
-            progress_callback(0.95, "Saving strategy", max_iterations)
+            progress_callback(0.95, "Updating strategy", max_iterations)
 
-        if success:
-            os.makedirs(strategy_dir, exist_ok=True)
+        if final_code != code:
             with open(strategy_file, "w") as f:
                 f.write(final_code)
-            logger.info(f"✅ Strategy saved: {strategy_file}")
+            logger.info(f"✅ Strategy updated: {strategy_file}")
 
         return {
             "status": "created" if success else "validation_failed",
