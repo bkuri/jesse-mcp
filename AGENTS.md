@@ -430,11 +430,11 @@ tests/
 
 ## Common Development Workflow
 
-For MCP server development workflow, including automatic synchronization to MetaMCP, see: **../MCP_DEVELOPMENT.md**
+For MCP server development workflow, including automatic synchronization to mcproxy, see: **../MCP_DEVELOPMENT.md**
 
 This includes:
 - Git hook + rsync setup for automatic sync
-- MetaMCP integration and container restart
+- mcproxy integration and container restart
 - Troubleshooting and maintenance guidelines
 - Complete development cycle instructions
 

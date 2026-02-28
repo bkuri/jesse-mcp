@@ -4,7 +4,7 @@ Jesse REST API Client
 Provides a clean abstraction over Jesse's REST API running on server2
 allowing full interactivity with Jesse without requiring local module imports.
 
-Configuration (via MetaMCP MCP Servers panel or environment variables):
+Configuration (via mcproxy or environment variables):
 - JESSE_URL: URL to Jesse API (default: http://server2:9100)
 - JESSE_PASSWORD: Jesse UI login password (recommended - will auto-login)
 - JESSE_API_TOKEN: Session token from /auth/login (alternative to password)
