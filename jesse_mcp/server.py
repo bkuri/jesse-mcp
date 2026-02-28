@@ -346,7 +346,7 @@ def _strategy_create_impl(
     timeframe: str = "1h",
     max_iterations: int = 5,
     overwrite: bool = False,
-    skip_backtest: bool = True,
+    skip_backtest: bool = False,
     progress_callback: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """
@@ -463,7 +463,7 @@ def strategy_create(
     max_iterations: int = 5,
     overwrite: bool = False,
     async_mode: bool = False,
-    skip_backtest: bool = True,
+    skip_backtest: bool = False,
 ) -> Dict[str, Any]:
     """
     Create strategy with iterative refinement (Ralph Wiggum loop).
@@ -481,7 +481,7 @@ def strategy_create(
         max_iterations: Maximum refinement iterations (default: 5)
         overwrite: Overwrite existing strategy (default: False)
         async_mode: Run asynchronously (default: False)
-        skip_backtest: Skip dry-run backtest validation (default: True)
+        skip_backtest: Skip dry-run backtest validation (default: False)
 
     Returns:
         Dict with status, name, iterations, validation_history, path, code, ready_for_backtest
