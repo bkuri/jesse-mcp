@@ -1,0 +1,409 @@
+================================================================================
+JESSE MCP SERVER - COMPREHENSIVE REFACTORING ANALYSIS
+================================================================================
+
+ANALYSIS DATE: 2025-02-28
+FILE ANALYZED: /home/bk/source/jesse-mcp/jesse_mcp/server.py
+TOTAL TOOLS: 47
+FILE SIZE: 2,134 lines
+
+================================================================================
+1. CURRENT STRUCTURE SUMMARY
+================================================================================
+
+Tool Distribution by Phase:
+  - Phase 1 (Backtesting):       6 tools  (lines 126-904)
+  - Phase 3 (Optimization):      4 tools  (lines 906-1061)
+  - Phase 4 (Risk Analysis):     4 tools  (lines 1063-1166)
+  - Phase 5 (Pairs Trading):     4 tools  (lines 1168-1283)
+  - Phase 6 (Live Trading):      9 tools  (lines 1436-1820)
+  - Strategy Creation:           9 tools  (lines 337-858, scattered)
+  - Paper Trading:               8 tools  (lines 1822-2087)
+  - Cache & Utilities:           3 tools  (lines 1285-1434)
+
+Global Variables (5 total):
+  1. jesse (Optional[Any])
+  2. optimizer (Optional[Any])
+  3. risk_analyzer (Optional[Any])
+  4. pairs_analyzer (Optional[Any])
+  5. _initialized (bool)
+
+Core Infrastructure (Keep in server.py):
+  - Lazy initialization function (_initialize_dependencies)
+  - FastMCP server instance (mcp)
+  - Health endpoint (/health)
+  - Main entry point (main())
+  - Agent tools registration
+
+================================================================================
+2. REFACTORING OPPORTUNITIES
+================================================================================
+
+PROBLEMS WITH CURRENT DESIGN:
+  [1] Monolithic 2,134-line file difficult to navigate
+  [2] Mixed concerns across unrelated trading phases
+  [3] Tool naming conventions (live_*, paper_*) simulate namespaces
+  [4] Complex initialization logic embedded in single file
+  [5] Tool relationships and dependencies not immediately visible
+  [6] Hard to test individual tool groups in isolation
+  [7] Discoverability: 47 tools in flat list
+
+PROPOSED SOLUTION:
+  - Modularize into 8 separate tool modules (180-320 lines each)
+  - Keep server.py as lightweight orchestrator (400 lines)
+  - Implement namespace prefixes via FastMCP custom naming
+  - Preserve lazy initialization and global state pattern
+  - Enable per-module testing and development
+
+================================================================================
+3. MODULAR STRUCTURE PROPOSAL
+================================================================================
+
+NEW DIRECTORY STRUCTURE:
+
+jesse_mcp/
+├── server.py (REFACTORED: 400 lines)
+│   ├── Lazy initialization (_initialize_dependencies)
+│   ├── Health endpoint (/health)
+│   ├── Tool registration dispatcher (register_all_tools)
+│   └── Main entry point
+│
+└── tools/ (NEW DIRECTORY)
+    ├── __init__.py (shared utilities)
+    ├── backtesting.py         (6 tools, ~180 lines)
+    ├── optimization.py         (4 tools, ~130 lines)
+    ├── risk_analysis.py        (4 tools, ~140 lines)
+    ├── pairs_trading.py        (4 tools, ~110 lines)
+    ├── strategy_creation.py    (9 tools, ~320 lines)
+    ├── live_trading.py         (9 tools, ~240 lines)
+    ├── paper_trading.py        (8 tools, ~210 lines)
+    └── cache_utilities.py      (3 tools, ~150 lines)
+
+TOOL REGISTRATION PATTERN (in each module):
+
+    def register_tools(mcp: FastMCP, dependency=None):
+        @mcp.tool(name="namespace:category:action")
+        def tool_function(...):
+            """Tool description"""
+            pass
+
+================================================================================
+4. NAMESPACE IMPLEMENTATION FINDINGS
+================================================================================
+
+FASTMCP CAPABILITY:
+  FastMCP supports custom tool naming via @mcp.tool(name="custom_name")
+  - Can use colon-separated hierarchical names
+  - No existing implementation in codebase
+  - Non-breaking change (optional implementation)
+
+RECOMMENDED NAMESPACE STRATEGY:
+
+  BACKTESTING:
+    backtesting:status                (jesse_status)
+    backtesting:exchanges             (get_exchanges)
+    backtesting:run                   (backtest)
+    backtesting:strategies:list       (strategy_list)
+    backtesting:strategies:read       (strategy_read)
+    backtesting:strategies:validate   (strategy_validate)
+
+  OPTIMIZATION:
+    optimization:run                  (optimize)
+    optimization:walk_forward         (walk_forward)
+    optimization:batch                (backtest_batch)
+    optimization:analyze              (analyze_results)
+
+  RISK ANALYSIS:
+    risk:monte_carlo                  (monte_carlo)
+    risk:var                          (var_calculation)
+    risk:stress_test                  (stress_test)
+    risk:report                       (risk_report)
+
+  PAIRS TRADING:
+    pairs:correlation                 (correlation_matrix)
+    pairs:backtest                    (pairs_backtest)
+    pairs:factors                     (factor_analysis)
+    pairs:regime                      (regime_detector)
+
+  STRATEGY:
+    strategy:create                   (strategy_create)
+    strategy:create:status            (strategy_create_status)
+    strategy:create:cancel            (strategy_create_cancel)
+    strategy:refine                   (strategy_refine)
+    strategy:delete                   (strategy_delete)
+    strategy:metadata                 (strategy_metadata)
+
+  TRADING (LIVE):
+    trading:live:check                (live_check_plugin)
+    trading:live:paper:start          (live_start_paper_trading)
+    trading:live:start                (live_start_live_trading)
+    trading:live:cancel               (live_cancel_session)
+    trading:live:sessions             (live_get_sessions)
+    trading:live:session:status       (live_get_status)
+    trading:live:orders               (live_get_orders)
+    trading:live:equity               (live_get_equity_curve)
+    trading:live:logs                 (live_get_logs)
+
+  TRADING (PAPER):
+    trading:paper:start               (paper_start)
+    trading:paper:stop                (paper_stop)
+    trading:paper:status              (paper_status)
+    trading:paper:trades              (paper_get_trades)
+    trading:paper:equity              (paper_get_equity)
+    trading:paper:metrics             (paper_get_metrics)
+    trading:paper:sessions            (paper_list_sessions)
+    trading:paper:update              (paper_update_session)
+
+  CACHE & UTILITIES:
+    cache:stats                       (cache_stats)
+    cache:clear                       (cache_clear)
+    cache:benchmark                   (backtest_benchmark)
+
+================================================================================
+5. TOOL EXTRACTION GUIDE (BY LINE NUMBERS)
+================================================================================
+
+BACKTESTING TOOLS (6 tools, extract to jesse_mcp/tools/backtesting.py):
+  [126-147]     jesse_status()
+  [150-188]     get_exchanges()
+  [190-294]     backtest()
+  [296-311]     strategy_list()
+  [313-323]     strategy_read()
+  [325-335]     strategy_validate()
+
+STRATEGY CREATION TOOLS (9 tools, extract to jesse_mcp/tools/strategy_creation.py):
+  [340-453]     _strategy_create_impl() [helper function]
+  [455-560]     strategy_create()
+  [562-607]     strategy_create_status()
+  [609-638]     strategy_create_cancel()
+  [640-725]     strategy_refine()
+  [727-770]     strategy_delete()
+  [772-808]     jobs_list()
+  [810-858]     strategy_metadata()
+  [860-881]     candles_import()
+  [883-904]     rate_limit_status()
+
+OPTIMIZATION TOOLS (4 tools, extract to jesse_mcp/tools/optimization.py):
+  [909-958]     optimize()
+  [960-993]     walk_forward()
+  [995-1022]    backtest_batch()
+  [1024-1061]   analyze_results()
+
+RISK ANALYSIS TOOLS (4 tools, extract to jesse_mcp/tools/risk_analysis.py):
+  [1066-1093]   monte_carlo()
+  [1095-1118]   var_calculation()
+  [1120-1139]   stress_test()
+  [1141-1166]   risk_report()
+
+PAIRS TRADING TOOLS (4 tools, extract to jesse_mcp/tools/pairs_trading.py):
+  [1171-1196]   correlation_matrix()
+  [1198-1229]   pairs_backtest()
+  [1231-1256]   factor_analysis()
+  [1258-1283]   regime_detector()
+
+CACHE & UTILITIES TOOLS (3 tools, extract to jesse_mcp/tools/cache_utilities.py):
+  [1288-1303]   cache_stats()
+  [1305-1328]   cache_clear()
+  [1330-1434]   backtest_benchmark()
+
+LIVE TRADING TOOLS (9 tools, extract to jesse_mcp/tools/live_trading.py):
+  [1439-1455]   live_check_plugin()
+  [1457-1548]   live_start_paper_trading()
+  [1550-1685]   live_start_live_trading()
+  [1687-1707]   live_cancel_session()
+  [1709-1729]   live_get_sessions()
+  [1731-1750]   live_get_status()
+  [1752-1771]   live_get_orders()
+  [1773-1798]   live_get_equity_curve()
+  [1800-1820]   live_get_logs()
+
+PAPER TRADING TOOLS (8 tools, extract to jesse_mcp/tools/paper_trading.py):
+  [1825-1888]   paper_start()
+  [1890-1917]   paper_stop()
+  [1919-1938]   paper_status()
+  [1940-1971]   paper_get_trades()
+  [1973-2014]   paper_get_equity()
+  [2016-2043]   paper_get_metrics()
+  [2045-2061]   paper_list_sessions()
+  [2063-2087]   paper_update_session()
+
+================================================================================
+6. DEPENDENCIES TO PRESERVE
+================================================================================
+
+CRITICAL IMPORTS (Must be preserved and passed to modules):
+  - FastMCP (server.py)
+  - jesse framework integration (multiple modules)
+  - jesse_rest_client (backtesting, optimization, live, paper)
+  - optimizer module (optimization.py)
+  - risk_analyzer module (risk_analysis.py)
+  - pairs_analyzer module (pairs_trading.py)
+  - strategy validation modules (strategy_creation.py)
+  - job_manager (strategy_creation.py)
+  - live_config, certification (live_trading.py)
+  - cache, rate_limiter (cache_utilities.py)
+
+DEPENDENCY MATRIX (Tool Module → Required Globals):
+  backtesting.py       → jesse, mcp
+  optimization.py      → optimizer, mcp
+  risk_analysis.py     → risk_analyzer, mcp
+  pairs_trading.py     → pairs_analyzer, mcp
+  strategy_creation.py → jesse, mcp
+  live_trading.py      → jesse, mcp
+  paper_trading.py     → mcp
+  cache_utilities.py   → mcp
+
+================================================================================
+7. IMPLEMENTATION STRATEGY
+================================================================================
+
+PHASE 1 - Low Dependency Tools (LOW RISK):
+  Step 1: Create jesse_mcp/tools/ directory
+  Step 2: Extract cache_utilities.py (only needs mcp)
+  Step 3: Extract risk_analysis.py (only needs risk_analyzer)
+  Step 4: Extract pairs_trading.py (only needs pairs_analyzer)
+  Step 5: Run tests for each module
+
+PHASE 2 - Mid Dependency Tools (MEDIUM RISK):
+  Step 6: Extract optimization.py (needs optimizer)
+  Step 7: Extract backtesting.py (needs jesse, rest_client)
+  Step 8: Run tests for each module
+
+PHASE 3 - High Dependency Tools (HIGHER RISK):
+  Step 9: Extract strategy_creation.py (complex dependencies)
+  Step 10: Extract live_trading.py (certification, config)
+  Step 11: Extract paper_trading.py (session management)
+  Step 12: Run tests for each module
+
+PHASE 4 - Server Refactoring:
+  Step 13: Refactor server.py to use registration dispatchers
+  Step 14: Add namespace prefixes (optional)
+  Step 15: Run full integration tests
+  Step 16: Update documentation
+
+================================================================================
+8. MIGRATION CHECKLIST
+================================================================================
+
+PRE-MIGRATION:
+  [ ] Review all 47 tools for dependencies
+  [ ] Identify shared utility functions
+  [ ] Create test plan for each module
+  [ ] Back up server.py
+
+DIRECTORY CREATION:
+  [ ] Create jesse_mcp/tools/ directory
+  [ ] Create jesse_mcp/tools/__init__.py
+
+TOOL EXTRACTION (In recommended order):
+  [ ] Extract cache_utilities.py (3 tools)
+  [ ] Extract risk_analysis.py (4 tools)
+  [ ] Extract pairs_trading.py (4 tools)
+  [ ] Extract optimization.py (4 tools)
+  [ ] Extract backtesting.py (6 tools)
+  [ ] Extract strategy_creation.py (9 tools)
+  [ ] Extract live_trading.py (9 tools)
+  [ ] Extract paper_trading.py (8 tools)
+
+TESTING:
+  [ ] Unit tests for each tool module
+  [ ] Integration tests with mcp instance
+  [ ] Test with mock dependencies
+  [ ] Test with real dependencies
+  [ ] Verify all 47 tools callable
+  [ ] Check error handling
+  [ ] Verify async/sync methods
+
+SERVER REFACTORING:
+  [ ] Refactor server.py (keep ~400 lines)
+  [ ] Create register_all_tools() function
+  [ ] Implement dependency injection
+  [ ] Test server startup
+  [ ] Test tool registration
+
+NAMESPACE IMPLEMENTATION (OPTIONAL):
+  [ ] Add name="..." to @mcp.tool decorators
+  [ ] Test hierarchical tool discovery
+  [ ] Update documentation
+  [ ] Update client code
+
+FINAL STEPS:
+  [ ] Full test suite passes
+  [ ] Documentation updated
+  [ ] Code review completed
+  [ ] Create git commit
+  [ ] Push to repository
+
+================================================================================
+9. KEY METRICS & OUTCOMES
+================================================================================
+
+BEFORE REFACTORING:
+  - server.py: 2,134 lines
+  - Tool groups: 1 (flat file)
+  - Avg section size: 250+ lines
+  - Discoverability: Low (flat list)
+  - Testability: Low (monolithic)
+  - Maintenance: Difficult
+
+AFTER REFACTORING:
+  - server.py: ~400 lines (81% reduction)
+  - Tool groups: 8 modules (improved organization)
+  - Avg module size: 150-180 lines (improved readability)
+  - Discoverability: High (hierarchical namespaces)
+  - Testability: High (per-module testing)
+  - Maintenance: Easy (clear separation of concerns)
+
+NON-BREAKING CHANGES:
+  - Tool functionality unchanged
+  - Same parameters and return types
+  - Backwards compatible (if using function names)
+  - Can keep old names alongside new ones
+
+================================================================================
+10. NAMESPACE PATTERN EXAMPLE
+================================================================================
+
+BEFORE (Current):
+  @mcp.tool
+  def live_start_paper_trading(...):
+      """Start paper trading"""
+      pass
+
+AFTER (With Namespaces):
+  def register_tools(mcp: FastMCP, jesse: Optional[Any]):
+      @mcp.tool(name="trading:live:paper:start")
+      def live_start_paper_trading(...):
+          """Start paper trading"""
+          pass
+
+BENEFITS:
+  - Clear hierarchical organization
+  - Better tool discovery for LLM agents
+  - Easier to find related tools
+  - Cleaner tool list presentation
+  - Optional implementation (non-breaking)
+
+================================================================================
+CONCLUSION
+================================================================================
+
+The jesse-mcp/server.py file is well-organized into logical phases but
+suffers from being a single 2,134-line monolithic file. The proposed
+modularization into 8 separate tool modules provides:
+
+1. Improved code organization and navigation
+2. Easier testing and maintenance
+3. Clear separation of concerns
+4. Optional namespace implementation via FastMCP
+5. Reduced file size for server.py from 2,134 to ~400 lines
+6. Enhanced tool discoverability for LLM agents
+7. Better support for incremental development
+
+The refactoring is non-breaking and can be implemented incrementally.
+The namespace implementation is optional and can be added at any time.
+
+All 47 tools have been identified with exact line numbers for extraction.
+The migration path has been planned with recommended phases and testing strategy.
+
+================================================================================

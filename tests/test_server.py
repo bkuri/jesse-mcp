@@ -28,29 +28,29 @@ async def test_tools_list():
         # Verify core tool names are present
         tool_names = {t.name for t in tools}
         core_tools = {
-            # Phase 1: Backtesting
-            "jesse_status",
-            "backtest",
-            "strategy_list",
-            "strategy_read",
-            "strategy_validate",
-            "candles_import",
-            # Phase 3: Optimization
-            "optimize",
-            "walk_forward",
-            "backtest_batch",
-            "analyze_results",
-            # Phase 4: Risk Analysis
-            "monte_carlo",
-            "var_calculation",
-            "stress_test",
+            # Phase 1: Backtesting (with namespace prefix)
+            "backtesting_status",
+            "backtesting_run",
+            "backtesting_list_strategies",
+            "backtesting_read_strategy",
+            "backtesting_validate",
+            "backtesting_import_candles",
+            # Phase 3: Optimization (with namespace prefix)
+            "optimization_run",
+            "optimization_walk_forward",
+            "optimization_batch",
+            "optimization_analyze",
+            # Phase 4: Risk Analysis (with namespace prefix)
+            "risk_monte_carlo",
+            "risk_var",
+            "risk_stress_test",
             "risk_report",
-            # Phase 5: Pairs Trading
-            "correlation_matrix",
+            # Phase 5: Pairs Trading (with namespace prefix)
+            "pairs_correlation",
             "pairs_backtest",
-            "factor_analysis",
-            "regime_detector",
-            # Cache Management
+            "pairs_factors",
+            "pairs_regimes",
+            # Cache Management (with namespace prefix)
             "cache_stats",
             "cache_clear",
         }
@@ -75,7 +75,7 @@ async def test_backtest_tool():
     transport = StdioTransport(command="python", args=["-m", "jesse_mcp"])
     async with Client(transport) as client:
         result = await client.call_tool(
-            "backtest",
+            "backtesting_run",
             {
                 "strategy": "Test01",
                 "symbol": "BTC-USDT",
@@ -103,7 +103,7 @@ async def test_strategy_list_tool():
 
     transport = StdioTransport(command="python", args=["-m", "jesse_mcp"])
     async with Client(transport) as client:
-        result = await client.call_tool("strategy_list", {})
+        result = await client.call_tool("backtesting_list_strategies", {})
 
         # FastMCP 2.x returns CallToolResult with .data containing the dict
         data = result.data if hasattr(result, "data") else result
@@ -122,7 +122,7 @@ async def test_jesse_status_tool():
 
     transport = StdioTransport(command="python", args=["-m", "jesse_mcp"])
     async with Client(transport) as client:
-        result = await client.call_tool("jesse_status", {})
+        result = await client.call_tool("backtesting_status", {})
 
         data = result.data if hasattr(result, "data") else result
         assert isinstance(data, dict), f"Expected dict, got {type(data)}"
@@ -142,7 +142,7 @@ async def test_optimize_tool():
     transport = StdioTransport(command="python", args=["-m", "jesse_mcp"])
     async with Client(transport) as client:
         result = await client.call_tool(
-            "optimize",
+            "optimization_run",
             {
                 "strategy": "Test01",
                 "symbol": "BTC-USDT",
@@ -171,7 +171,7 @@ async def test_monte_carlo_tool():
     async with Client(transport) as client:
         mock_result = {"trades": [], "metrics": {}, "equity_curve": []}
         result = await client.call_tool(
-            "monte_carlo",
+            "risk_monte_carlo",
             {
                 "backtest_result": mock_result,
                 "simulations": 1000,

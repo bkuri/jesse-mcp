@@ -123,7 +123,7 @@ async def health_endpoint(request: Request) -> JSONResponse:
 # ==================== PHASE 1: BACKTESTING TOOLS ====================
 
 
-@mcp.tool
+@mcp.tool(name="backtesting_status")
 def jesse_status() -> Dict[str, Any]:
     """
     Check Jesse REST API health and connection status.
@@ -147,7 +147,7 @@ def jesse_status() -> Dict[str, Any]:
         }
 
 
-@mcp.tool
+@mcp.tool(name="backtesting_exchanges")
 def get_exchanges() -> Dict[str, Any]:
     """
     Get list of supported exchanges in Jesse.
@@ -187,7 +187,7 @@ def get_exchanges() -> Dict[str, Any]:
         return {"error": str(e), "exchanges": []}
 
 
-@mcp.tool
+@mcp.tool(name="backtesting_run")
 def backtest(
     strategy: str,
     symbol: str,
@@ -293,7 +293,7 @@ def backtest(
             }
 
 
-@mcp.tool
+@mcp.tool(name="backtesting_list_strategies")
 def strategy_list(include_test_strategies: bool = False) -> Dict[str, Any]:
     """
     List all available trading strategies.
@@ -310,7 +310,7 @@ def strategy_list(include_test_strategies: bool = False) -> Dict[str, Any]:
         return {"error": str(e), "strategies": []}
 
 
-@mcp.tool
+@mcp.tool(name="backtesting_read_strategy")
 def strategy_read(name: str) -> Dict[str, Any]:
     """Read strategy source code"""
     try:
@@ -322,7 +322,7 @@ def strategy_read(name: str) -> Dict[str, Any]:
         return {"error": str(e), "name": name}
 
 
-@mcp.tool
+@mcp.tool(name="backtesting_validate")
 def strategy_validate(code: str) -> Dict[str, Any]:
     """Validate strategy code without saving"""
     try:
@@ -452,7 +452,7 @@ def _strategy_create_impl(
         return {"error": str(e), "error_type": type(e).__name__, "status": "failed"}
 
 
-@mcp.tool
+@mcp.tool(name="strategy_create")
 def strategy_create(
     name: str,
     description: str,
@@ -559,7 +559,7 @@ def strategy_create(
         return {"error": str(e), "error_type": type(e).__name__}
 
 
-@mcp.tool
+@mcp.tool(name="strategy_create_status")
 def strategy_create_status(job_id: str) -> Dict[str, Any]:
     """
     Poll async job progress for strategy creation.
@@ -606,7 +606,7 @@ def strategy_create_status(job_id: str) -> Dict[str, Any]:
         return {"error": str(e), "job_id": job_id}
 
 
-@mcp.tool
+@mcp.tool(name="strategy_create_cancel")
 def strategy_create_cancel(job_id: str) -> Dict[str, Any]:
     """
     Cancel async strategy creation job.
@@ -637,7 +637,7 @@ def strategy_create_cancel(job_id: str) -> Dict[str, Any]:
         return {"error": str(e), "job_id": job_id}
 
 
-@mcp.tool
+@mcp.tool(name="strategy_refine")
 def strategy_refine(
     name: str,
     feedback: str,
@@ -724,7 +724,7 @@ def strategy_refine(
         return {"error": str(e), "error_type": type(e).__name__}
 
 
-@mcp.tool
+@mcp.tool(name="strategy_delete")
 def strategy_delete(name: str, confirm: bool = False) -> Dict[str, Any]:
     """
     Delete a strategy.
@@ -769,7 +769,7 @@ def strategy_delete(name: str, confirm: bool = False) -> Dict[str, Any]:
         return {"error": str(e), "error_type": type(e).__name__}
 
 
-@mcp.tool
+@mcp.tool(name="jobs_list")
 def jobs_list(job_type: Optional[str] = None, limit: int = 50) -> Dict[str, Any]:
     """
     List recent jobs.
@@ -807,7 +807,7 @@ def jobs_list(job_type: Optional[str] = None, limit: int = 50) -> Dict[str, Any]
         return {"error": str(e), "jobs": []}
 
 
-@mcp.tool
+@mcp.tool(name="strategy_metadata")
 def strategy_metadata(name: str) -> Dict[str, Any]:
     """
     Get metadata and version info for a strategy.
@@ -857,7 +857,7 @@ def strategy_metadata(name: str) -> Dict[str, Any]:
         return {"error": str(e), "error_type": type(e).__name__}
 
 
-@mcp.tool
+@mcp.tool(name="backtesting_import_candles")
 def candles_import(
     exchange: str,
     symbol: str,
@@ -880,7 +880,7 @@ def candles_import(
         return {"error": str(e), "success": False}
 
 
-@mcp.tool
+@mcp.tool(name="rate_limit_status")
 def rate_limit_status() -> Dict[str, Any]:
     """
     Get current rate limiter status for Jesse API calls.
@@ -906,7 +906,7 @@ def rate_limit_status() -> Dict[str, Any]:
 # ==================== PHASE 3: OPTIMIZATION TOOLS ====================
 
 
-@mcp.tool
+@mcp.tool(name="optimization_run")
 async def optimize(
     strategy: str,
     symbol: str,
@@ -957,7 +957,7 @@ async def optimize(
         return {"error": str(e), "error_type": type(e).__name__}
 
 
-@mcp.tool
+@mcp.tool(name="optimization_walk_forward")
 async def walk_forward(
     strategy: str,
     symbol: str,
@@ -992,7 +992,7 @@ async def walk_forward(
         return {"error": str(e), "error_type": type(e).__name__}
 
 
-@mcp.tool
+@mcp.tool(name="optimization_batch")
 async def backtest_batch(
     strategy: str,
     symbols: List[str],
@@ -1021,7 +1021,7 @@ async def backtest_batch(
         return {"error": str(e), "error_type": type(e).__name__}
 
 
-@mcp.tool
+@mcp.tool(name="optimization_analyze")
 def analyze_results(
     backtest_result: Dict[str, Any],
     analysis_type: str = "basic",
@@ -1063,7 +1063,7 @@ def analyze_results(
 # ==================== PHASE 4: RISK ANALYSIS TOOLS ====================
 
 
-@mcp.tool
+@mcp.tool(name="risk_monte_carlo")
 async def monte_carlo(
     backtest_result: Dict[str, Any],
     simulations: int = 10000,
@@ -1092,7 +1092,7 @@ async def monte_carlo(
         return {"error": str(e), "error_type": type(e).__name__}
 
 
-@mcp.tool
+@mcp.tool(name="risk_var")
 async def var_calculation(
     backtest_result: Dict[str, Any],
     confidence_levels: Optional[List[float]] = None,
@@ -1117,7 +1117,7 @@ async def var_calculation(
         return {"error": str(e), "error_type": type(e).__name__}
 
 
-@mcp.tool
+@mcp.tool(name="risk_stress_test")
 async def stress_test(
     backtest_result: Dict[str, Any],
     scenarios: Optional[List[str]] = None,
@@ -1138,7 +1138,7 @@ async def stress_test(
         return {"error": str(e), "error_type": type(e).__name__}
 
 
-@mcp.tool
+@mcp.tool(name="risk_report")
 async def risk_report(
     backtest_result: Dict[str, Any],
     include_monte_carlo: bool = True,
@@ -1168,7 +1168,7 @@ async def risk_report(
 # ==================== PHASE 5: PAIRS TRADING TOOLS ====================
 
 
-@mcp.tool
+@mcp.tool(name="pairs_correlation")
 async def correlation_matrix(
     backtest_results: List[Dict[str, Any]],
     lookback_period: int = 60,
@@ -1195,7 +1195,7 @@ async def correlation_matrix(
         return {"error": str(e), "error_type": type(e).__name__}
 
 
-@mcp.tool
+@mcp.tool(name="pairs_backtest")
 async def pairs_backtest(
     pair: Dict[str, Any],
     backtest_result_1: Dict[str, Any],
@@ -1228,7 +1228,7 @@ async def pairs_backtest(
         return {"error": str(e), "error_type": type(e).__name__}
 
 
-@mcp.tool
+@mcp.tool(name="pairs_factors")
 async def factor_analysis(
     backtest_result: Dict[str, Any],
     factors: Optional[List[str]] = None,
@@ -1255,7 +1255,7 @@ async def factor_analysis(
         return {"error": str(e), "error_type": type(e).__name__}
 
 
-@mcp.tool
+@mcp.tool(name="pairs_regimes")
 async def regime_detector(
     backtest_results: List[Dict[str, Any]],
     lookback_period: int = 60,
@@ -1285,7 +1285,7 @@ async def regime_detector(
 # ==================== CACHE MANAGEMENT TOOLS ====================
 
 
-@mcp.tool
+@mcp.tool(name="cache_stats")
 def cache_stats() -> Dict[str, Any]:
     """
     Get cache statistics including hit/miss ratio and cache sizes.
@@ -1302,7 +1302,7 @@ def cache_stats() -> Dict[str, Any]:
         return {"error": str(e), "error_type": type(e).__name__}
 
 
-@mcp.tool
+@mcp.tool(name="cache_clear")
 def cache_clear(cache_name: Optional[str] = None) -> Dict[str, Any]:
     """
     Clear cache(s) to free memory or force fresh data.
@@ -1327,7 +1327,7 @@ def cache_clear(cache_name: Optional[str] = None) -> Dict[str, Any]:
         return {"error": str(e), "error_type": type(e).__name__}
 
 
-@mcp.tool
+@mcp.tool(name="benchmark_run")
 def backtest_benchmark(
     symbol: str = "BTC-USDT",
     timeframe: str = "1h",
@@ -1436,7 +1436,7 @@ def backtest_benchmark(
 # ==================== LIVE TRADING TOOLS (Phase 6) ====================
 
 
-@mcp.tool
+@mcp.tool(name="trading_live_check")
 def live_check_plugin() -> Dict[str, Any]:
     """
     Check if jesse-live plugin is installed and available.
@@ -1454,7 +1454,7 @@ def live_check_plugin() -> Dict[str, Any]:
         return {"available": False, "error": str(e)}
 
 
-@mcp.tool
+@mcp.tool(name="trading_live_paper")
 def live_start_paper_trading(
     strategy: str,
     symbol: str,
@@ -1547,7 +1547,7 @@ def live_start_paper_trading(
         return {"error": str(e), "error_type": type(e).__name__}
 
 
-@mcp.tool
+@mcp.tool(name="trading_live_real")
 def live_start_live_trading(
     strategy: str,
     symbol: str,
@@ -1684,7 +1684,7 @@ def live_start_live_trading(
         return {"error": str(e), "error_type": type(e).__name__}
 
 
-@mcp.tool
+@mcp.tool(name="trading_live_cancel")
 def live_cancel_session(session_id: str, paper_mode: bool = True) -> Dict[str, Any]:
     """
     Cancel a running live/paper trading session.
@@ -1706,7 +1706,7 @@ def live_cancel_session(session_id: str, paper_mode: bool = True) -> Dict[str, A
         return {"error": str(e), "error_type": type(e).__name__}
 
 
-@mcp.tool
+@mcp.tool(name="trading_live_sessions")
 def live_get_sessions(limit: int = 50, offset: int = 0) -> Dict[str, Any]:
     """
     Get list of live trading sessions.
@@ -1728,7 +1728,7 @@ def live_get_sessions(limit: int = 50, offset: int = 0) -> Dict[str, Any]:
         return {"error": str(e), "sessions": []}
 
 
-@mcp.tool
+@mcp.tool(name="trading_live_status")
 def live_get_status(session_id: str) -> Dict[str, Any]:
     """
     Get status of a specific live trading session.
@@ -1749,7 +1749,7 @@ def live_get_status(session_id: str) -> Dict[str, Any]:
         return {"error": str(e), "session": None}
 
 
-@mcp.tool
+@mcp.tool(name="trading_live_orders")
 def live_get_orders(session_id: str) -> Dict[str, Any]:
     """
     Get orders from a live trading session.
@@ -1770,7 +1770,7 @@ def live_get_orders(session_id: str) -> Dict[str, Any]:
         return {"error": str(e), "orders": []}
 
 
-@mcp.tool
+@mcp.tool(name="trading_live_equity")
 def live_get_equity_curve(
     session_id: str,
     from_ms: Optional[int] = None,
@@ -1797,7 +1797,7 @@ def live_get_equity_curve(
         return {"error": str(e), "data": []}
 
 
-@mcp.tool
+@mcp.tool(name="trading_live_logs")
 def live_get_logs(session_id: str, log_type: str = "all") -> Dict[str, Any]:
     """
     Get logs from a live trading session.
@@ -1822,7 +1822,7 @@ def live_get_logs(session_id: str, log_type: str = "all") -> Dict[str, Any]:
 # ==================== PAPER TRADING TOOLS (PRD-PAPER.md) ====================
 
 
-@mcp.tool
+@mcp.tool(name="trading_paper_start")
 def paper_start(
     strategy: str,
     symbol: str,
@@ -1887,7 +1887,7 @@ def paper_start(
         return {"error": str(e), "error_type": type(e).__name__}
 
 
-@mcp.tool
+@mcp.tool(name="trading_paper_stop")
 def paper_stop(session_id: str) -> Dict[str, Any]:
     """
     Stop a paper trading session and return final metrics.
@@ -1916,7 +1916,7 @@ def paper_stop(session_id: str) -> Dict[str, Any]:
         return {"error": str(e), "error_type": type(e).__name__}
 
 
-@mcp.tool
+@mcp.tool(name="trading_paper_status")
 def paper_status(session_id: str) -> Dict[str, Any]:
     """
     Get current status of a paper trading session.
@@ -1937,7 +1937,7 @@ def paper_status(session_id: str) -> Dict[str, Any]:
         return {"error": str(e), "session": None}
 
 
-@mcp.tool
+@mcp.tool(name="trading_paper_trades")
 def paper_get_trades(session_id: str, limit: int = 100, offset: int = 0) -> Dict[str, Any]:
     """
     Get trades executed in a paper trading session.
@@ -1970,7 +1970,7 @@ def paper_get_trades(session_id: str, limit: int = 100, offset: int = 0) -> Dict
         return {"error": str(e), "trades": []}
 
 
-@mcp.tool
+@mcp.tool(name="trading_paper_equity_history")
 def paper_get_equity(session_id: str, resolution: str = "1h") -> Dict[str, Any]:
     """
     Get equity curve data for a paper trading session.
@@ -2013,7 +2013,7 @@ def paper_get_equity(session_id: str, resolution: str = "1h") -> Dict[str, Any]:
         return {"error": str(e), "equity_curve": []}
 
 
-@mcp.tool
+@mcp.tool(name="trading_paper_metrics")
 def paper_get_metrics(session_id: str) -> Dict[str, Any]:
     """
     Get calculated performance metrics for a paper trading session.
@@ -2042,7 +2042,7 @@ def paper_get_metrics(session_id: str) -> Dict[str, Any]:
         return {"error": str(e), "metrics": {}}
 
 
-@mcp.tool
+@mcp.tool(name="trading_paper_list")
 def paper_list_sessions() -> Dict[str, Any]:
     """
     List all paper trading sessions.
@@ -2060,7 +2060,7 @@ def paper_list_sessions() -> Dict[str, Any]:
         return {"error": str(e), "sessions": []}
 
 
-@mcp.tool
+@mcp.tool(name="trading_paper_update")
 def paper_update_session(session_id: str, notes: Optional[str] = None) -> Dict[str, Any]:
     """
     Update session parameters (limited to safe modifications).

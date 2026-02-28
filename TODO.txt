@@ -1,0 +1,20 @@
+COMPLETED TASKS
+===============
+
+✅ refactor server.py - Added namespace prefixes to all 47 tools
+   - All tools now use namespaced naming convention
+   - Format: phase_action (e.g., backtesting_run, optimization_run)
+   - Organized by trading phase for better discoverability
+
+✅ add namespace at the URI level
+   - Implemented MCP-compliant tool naming with underscore separators
+   - Tools grouped by phase: backtesting_, optimization_, risk_, pairs_, trading_, strategy_, cache_, etc.
+   - All tools pass MCP validation (no special characters in names)
+
+FUTURE REFACTORING OPPORTUNITIES
+================================
+
+- Extract tools into separate modules (jesse_mcp/tools/backtesting.py, etc.)
+  for better organization and maintainability
+- Consider HTTP namespace routing if upgrading to OpenAPI-style API
+- Add tool grouping metadata for better LLM discoverability
