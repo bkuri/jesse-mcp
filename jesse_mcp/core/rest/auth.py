@@ -29,14 +29,14 @@ def authenticate_with_password(session: requests.Session, base_url: str, passwor
         )
         response.raise_for_status()
         data = response.json()
-        auth_token = data.get("auth_token")
+        auth_token = data.get("token") or data.get("auth_token")
         if auth_token:
             session.headers.update({"authorization": auth_token})
             logger.info("✅ Authenticated with Jesse API (via login)")
             return auth_token
         else:
-            logger.error("❌ No auth_token in login response")
-            raise ValueError("No auth_token in login response")
+            logger.error(f"❌ No token in login response: {data}")
+            raise ValueError(f"No token in login response: {data}")
     except Exception as e:
         logger.error(f"❌ Authentication failed: {e}")
         raise
