@@ -127,7 +127,7 @@ class TestAuthenticateWithPassword:
         from jesse_mcp.core.rest import auth
 
         with patch("jesse_mcp.core.rest.auth.logger") as mock_logger:
-            with pytest.raises(ValueError, match="No auth_token"):
+            with pytest.raises(ValueError, match="No token in login response"):
                 auth.authenticate_with_password(mock_session, "http://test:8000", "wrong-password")
 
             mock_logger.error.assert_called()
