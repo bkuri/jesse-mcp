@@ -221,6 +221,7 @@ async def backtest(
     3. analyze_results() on both to compare
     """
     try:
+        import asyncio
         from jesse_mcp.core.jesse_rest_client import get_jesse_rest_client
 
         client = get_jesse_rest_client()
@@ -228,7 +229,8 @@ async def backtest(
             raise RuntimeError("Jesse REST client not available")
 
         routes = [{"strategy": strategy, "symbol": symbol, "timeframe": timeframe}]
-        result = client.backtest(
+        result = await asyncio.to_thread(
+            client.backtest,
             routes=routes,
             start_date=start_date,
             end_date=end_date,
@@ -252,7 +254,8 @@ async def backtest(
             from jesse_mcp.core.mock import get_mock_jesse_wrapper
 
             mock_wrapper = get_mock_jesse_wrapper()
-            mock_result = mock_wrapper.backtest(
+            mock_result = await asyncio.to_thread(
+                mock_wrapper.backtest,
                 strategy_name=strategy,
                 symbol=symbol,
                 timeframe=timeframe,
@@ -269,11 +272,11 @@ async def backtest(
     except Exception as e:
         logger.warning(f"Backtest failed with exception: {e}, attempting fallback to mock")
         try:
-            # Fallback to mock implementation
             from jesse_mcp.core.mock import get_mock_jesse_wrapper
 
             mock_wrapper = get_mock_jesse_wrapper()
-            mock_result = mock_wrapper.backtest(
+            mock_result = await asyncio.to_thread(
+                mock_wrapper.backtest,
                 strategy_name=strategy,
                 symbol=symbol,
                 timeframe=timeframe,
