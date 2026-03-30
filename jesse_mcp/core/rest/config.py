@@ -237,9 +237,37 @@ def validate_timeframe(exchange: str, timeframe: str) -> Dict[str, Any]:
 
 
 def map_exchange_name(exchange: str, exchange_type: str = "futures") -> str:
-    """Map exchange name to Jesse's full exchange name format.
-    
-    Most exchanges use the same name for both spot and futures in Jesse,
-    so this function primarily returns the exchange name as-is.
-    """
+    """Map exchange name to Jesse's full exchange name format."""
+    exchange_type_lower = exchange_type.lower()
+
+    mapping: dict[str, dict[str, str]] = {
+        "binance": {
+            "spot": "Binance Spot",
+            "futures": "Binance Perpetual Futures",
+        },
+        "bybit": {
+            "spot": "Bybit Spot",
+            "futures": "Bybit USDT Perpetual",
+        },
+        "bitfinex": {
+            "spot": "Bitfinex Spot",
+            "futures": "Bitfinex Spot",
+        },
+        "coinbase": {
+            "spot": "Coinbase Spot",
+            "futures": "Coinbase Spot",
+        },
+        "gate": {
+            "spot": "Gate Spot",
+            "futures": "Gate USDT Perpetual",
+        },
+        "hyperliquid": {
+            "spot": "Hyperliquid Perpetual",
+            "futures": "Hyperliquid Perpetual",
+        },
+    }
+
+    exchange_lower = exchange.lower()
+    if exchange_lower in mapping:
+        return mapping[exchange_lower].get(exchange_type_lower, exchange)
     return exchange
