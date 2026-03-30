@@ -188,7 +188,7 @@ def get_exchanges() -> Dict[str, Any]:
 
 
 @mcp.tool
-def backtest(
+async def backtest(
     strategy: str,
     symbol: str,
     timeframe: str,
@@ -858,7 +858,7 @@ def strategy_metadata(name: str) -> Dict[str, Any]:
 
 
 @mcp.tool
-def candles_import(
+async def candles_import(
     exchange: str,
     symbol: str,
     timeframe: str,
@@ -1024,7 +1024,7 @@ async def backtest_batch(
 
 
 @mcp.tool
-def analyze_results(
+async def analyze_results(
     backtest_result: Dict[str, Any],
     analysis_type: str = "basic",
     include_trade_analysis: bool = True,
@@ -1330,7 +1330,7 @@ def cache_clear(cache_name: Optional[str] = None) -> Dict[str, Any]:
 
 
 @mcp.tool
-def backtest_benchmark(
+async def backtest_benchmark(
     symbol: str = "BTC-USDT",
     timeframe: str = "1h",
     days: int = 30,
