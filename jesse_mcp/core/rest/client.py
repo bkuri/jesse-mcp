@@ -77,8 +77,11 @@ class JesseRESTClient:
             response = self.session.get(f"{self.base_url}/", timeout=5)
             if response.status_code == 200:
                 result["connected"] = True
-                data = response.json()
-                result["jesse_version"] = data.get("version", "unknown")
+                try:
+                    data = response.json()
+                    result["jesse_version"] = data.get("version", "unknown")
+                except (ValueError, json.JSONDecodeError):
+                    result["jesse_version"] = "unknown"
             elif response.status_code == 401:
                 result["error"] = "Unauthorized - check JESSE_API_TOKEN"
             else:
