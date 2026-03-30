@@ -100,6 +100,11 @@ def build_optimization_payload(
     hyperparameters = []
     for name, spec in param_space.items():
         hp = {"name": name}
+        if isinstance(spec, (list, tuple)):
+            if len(spec) == 2:
+                spec = {"type": "int", "min": spec[0], "max": spec[1]}
+            else:
+                spec = {"type": "int", "min": spec[0], "max": spec[0], "step": spec[1] if len(spec) > 2 else 1}
         if spec.get("type") == "int":
             hp["type"] = "int"
             hp["min"] = spec.get("min", 1)

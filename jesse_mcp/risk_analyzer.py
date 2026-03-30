@@ -75,32 +75,15 @@ class Phase4RiskAnalyzer:
         )
         start_time = time.time()
 
-        # Extract equity curve and returns
         if "equity_curve" not in backtest_result:
             return {"error": "Equity curve data not available for Monte Carlo analysis"}
 
-        equity_curve = backtest_result["equity_curve"]
-
-        # Handle both equity curve formats
-        if not equity_curve or len(equity_curve) < 2:
+        raw_curve = backtest_result["equity_curve"]
+        if not raw_curve or len(raw_curve) < 2:
             return {"error": "Equity curve must have at least 2 data points"}
 
-        if isinstance(equity_curve[0], dict):
-            # Format: [{"return": 0.01}, ...] or [{"value": 10000, "return": 0.01}, ...]
-            returns = [point.get("return", 0) for point in equity_curve]
-        elif isinstance(equity_curve[0], (int, float)):
-            # Format: [10000, 10100, 10250, ...] - calculate returns from values
-            returns = []
-            for i in range(1, len(equity_curve)):
-                if equity_curve[i - 1] != 0:
-                    ret = (equity_curve[i] - equity_curve[i - 1]) / equity_curve[i - 1]
-                else:
-                    ret = 0
-                returns.append(ret)
-        else:
-            return {
-                "error": f"Unsupported equity_curve format: {type(equity_curve[0])}"
-            }
+        equity_curve = self._normalize_equity_curve(raw_curve)
+        returns = [point["return"] for point in equity_curve]
 
         # Generate Monte Carlo paths
         final_values = []
@@ -211,7 +194,7 @@ class Phase4RiskAnalyzer:
         if "equity_curve" not in backtest_result:
             return {"error": "Equity curve data not available for VaR calculation"}
 
-        equity_curve = backtest_result["equity_curve"]
+        equity_curve = self._normalize_equity_curve(backtest_result["equity_curve"])
         returns = [point["return"] for point in equity_curve]
 
         var_results = {}
@@ -300,7 +283,7 @@ class Phase4RiskAnalyzer:
         if "equity_curve" not in backtest_result:
             return {"error": "Equity curve data not available for stress testing"}
 
-        equity_curve = backtest_result["equity_curve"]
+        equity_curve = self._normalize_equity_curve(backtest_result["equity_curve"])
         returns = [point["return"] for point in equity_curve]
 
         stress_results = {}
@@ -442,6 +425,49 @@ class Phase4RiskAnalyzer:
             return self._format_detailed_report(report)
         else:
             return self._format_summary_report(report)
+
+    def _normalize_equity_curve(self, raw_curve: List[Any]) -> List[Dict[str, float]]:
+        if not raw_curve:
+            return []
+
+        first = raw_curve[0]
+
+        if isinstance(first, dict) and "return" in first:
+            return raw_curve
+
+        if isinstance(first, dict) and ("value" in first or "time" in first):
+            normalized: List[Dict[str, float]] = []
+            peak = 0.0
+            for i, point in enumerate(raw_curve):
+                equity = float(point.get("value", point.get("equity", 0)))
+                peak = max(peak, equity)
+                drawdown = (peak - equity) / peak if peak > 0 else 0.0
+                if i == 0:
+                    ret = 0.0
+                else:
+                    prev_equity = float(
+                        raw_curve[i - 1].get("value", raw_curve[i - 1].get("equity", 0))
+                    )
+                    ret = (equity - prev_equity) / prev_equity if prev_equity != 0 else 0.0
+                normalized.append({"return": ret, "equity": equity, "drawdown": drawdown})
+            return normalized
+
+        if isinstance(first, (int, float)):
+            normalized = []
+            peak = 0.0
+            for i, val in enumerate(raw_curve):
+                equity = float(val)
+                peak = max(peak, equity)
+                drawdown = (peak - equity) / peak if peak > 0 else 0.0
+                if i == 0:
+                    ret = 0.0
+                else:
+                    prev_equity = float(raw_curve[i - 1])
+                    ret = (equity - prev_equity) / prev_equity if prev_equity != 0 else 0.0
+                normalized.append({"return": ret, "equity": equity, "drawdown": drawdown})
+            return normalized
+
+        return raw_curve
 
     # Helper methods for Monte Carlo
     def _block_bootstrap(self, returns: List[float], block_size: int) -> List[float]:
@@ -769,7 +795,8 @@ class Phase4RiskAnalyzer:
         if "equity_curve" not in backtest_result:
             return 0
 
-        returns = [point["return"] for point in backtest_result["equity_curve"]]
+        equity_curve = self._normalize_equity_curve(backtest_result["equity_curve"])
+        returns = [point["return"] for point in equity_curve]
         if not returns:
             return 0
 
@@ -782,7 +809,8 @@ class Phase4RiskAnalyzer:
         if "equity_curve" not in backtest_result:
             return 0
 
-        returns = [point["return"] for point in backtest_result["equity_curve"]]
+        equity_curve = self._normalize_equity_curve(backtest_result["equity_curve"])
+        returns = [point["return"] for point in equity_curve]
         if not returns:
             return 0
 

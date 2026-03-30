@@ -1017,7 +1017,7 @@ async def backtest_batch(
             timeframes=timeframes,
             start_date=start_date,
             end_date=end_date,
-            hyperparameters=hyperparameters or [],
+            hyperparameters=hyperparameters,
             concurrent_limit=concurrent_limit,
         )
         return result
