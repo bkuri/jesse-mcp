@@ -592,10 +592,15 @@ class TestImportCandles:
             json=lambda: {"success": True, "message": "Import started"},
             raise_for_status=Mock(),
         )
+        client.session.get.return_value = Mock(
+            status_code=200,
+            json=lambda: {"status": "completed", "imported_count": 1000},
+        )
 
         result = client.import_candles(
             exchange="Binance",
             symbol="BTC-USDT",
+            timeframe="1h",
             start_date="2023-01-01",
         )
 
@@ -603,6 +608,10 @@ class TestImportCandles:
         client.session.post.assert_called_once()
         call_args = client.session.post.call_args
         assert "/candles/import" in call_args[0][0]
+        payload = call_args[1]["json"]
+        assert "id" in payload
+        assert payload["timeframe"] == "1h"
+        assert payload["start_date"] == "2023-01-01"
 
     def test_import_candles_with_end_date(self):
         """Test import_candles with optional end_date"""
@@ -616,10 +625,15 @@ class TestImportCandles:
             json=lambda: {"success": True, "message": "Import started"},
             raise_for_status=Mock(),
         )
+        client.session.get.return_value = Mock(
+            status_code=200,
+            json=lambda: {"status": "completed", "imported_count": 2000},
+        )
 
         result = client.import_candles(
             exchange="Binance",
             symbol="BTC-USDT",
+            timeframe="1h",
             start_date="2023-01-01",
             end_date="2023-12-31",
         )
@@ -627,10 +641,10 @@ class TestImportCandles:
         assert result["success"] is True
         call_args = client.session.post.call_args
         payload = call_args[1]["json"]
-        assert payload["end_date"] == "2023-12-31"
+        assert payload["finish_date"] == "2023-12-31"
 
-    def test_import_candles_async_mode(self):
-        """Test import_candles with async_mode"""
+    def test_import_candles_polls_for_completion(self):
+        """Test import_candles polls for completion status"""
         from jesse_mcp.core.rest import JesseRESTClient
 
         client = JesseRESTClient.__new__(JesseRESTClient)
@@ -641,18 +655,21 @@ class TestImportCandles:
             json=lambda: {"status": "started", "job_id": "123"},
             raise_for_status=Mock(),
         )
+        client.session.get.return_value = Mock(
+            status_code=200,
+            json=lambda: {"status": "completed", "imported_count": 500},
+        )
 
         result = client.import_candles(
             exchange="Binance",
             symbol="BTC-USDT",
+            timeframe="1h",
             start_date="2023-01-01",
-            async_mode=True,
         )
 
-        assert result["status"] == "started"
-        call_args = client.session.post.call_args
-        payload = call_args[1]["json"]
-        assert payload["async_mode"] is True
+        assert result["success"] is True
+        assert result["candles_imported"] == 500
+        client.session.get.assert_called()
 
 
 class TestGetBacktestSessions:

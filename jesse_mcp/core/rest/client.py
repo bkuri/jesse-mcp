@@ -447,47 +447,69 @@ class JesseRESTClient:
         self,
         exchange: str,
         symbol: str,
+        timeframe: str,
         start_date: str,
         end_date: Optional[str] = None,
-        async_mode: bool = False,
     ) -> Dict[str, Any]:
         """Import candle data from exchange via Jesse REST API."""
+        import time
+        import uuid as uuid_mod
+
         try:
-            logger.info(f"📥 Importing candles: {exchange} {symbol} from {start_date}")
+            candle_id = str(uuid_mod.uuid4())
+            logger.info(f"📥 Importing candles: {exchange} {symbol} {timeframe} from {start_date}")
 
             payload: Dict[str, Any] = {
+                "id": candle_id,
                 "exchange": exchange,
                 "symbol": symbol,
+                "timeframe": timeframe,
                 "start_date": start_date,
             }
 
             if end_date:
-                payload["end_date"] = end_date
-
-            if async_mode:
-                payload["async_mode"] = True
+                payload["finish_date"] = end_date
 
             response = self.session.post(
                 f"{self.base_url}/candles/import",
                 json=payload,
-                timeout=300 if not async_mode else 30,
+                timeout=30,
             )
             response.raise_for_status()
-            result = response.json()
 
-            if result.get("success", False) or result.get("status") == "started":
-                logger.info(f"✅ Candle import started for {exchange} {symbol}")
-            else:
-                logger.warning(f"⚠️ Candle import response: {result.get('message', 'unknown')}")
+            max_wait = 120
+            waited = 0
 
-            return result
+            while waited < max_wait:
+                time.sleep(2)
+                waited += 2
 
-        except requests.exceptions.Timeout:
-            logger.error(f"❌ Candle import timeout for {exchange} {symbol}")
+                try:
+                    status_resp = self.session.get(
+                        f"{self.base_url}/candles/import/{candle_id}",
+                        timeout=10,
+                    )
+                    if status_resp.status_code == 200:
+                        status_data = status_resp.json()
+                        if status_data.get("status") == "completed":
+                            logger.info(f"✅ Candle import completed for {exchange} {symbol}")
+                            return {
+                                "success": True,
+                                "candles_imported": status_data.get("imported_count", 0),
+                            }
+                        elif status_data.get("status") == "failed":
+                            return {
+                                "success": False,
+                                "error": status_data.get("error", "Import failed"),
+                            }
+                except requests.exceptions.RequestException:
+                    pass
+
             return {
-                "error": "Import request timed out - try async_mode=True",
                 "success": False,
+                "error": "Import timed out after 120 seconds",
             }
+
         except Exception as e:
             logger.error(f"❌ Candle import failed: {e}")
             return {"error": str(e), "success": False}

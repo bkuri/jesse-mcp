@@ -227,10 +227,11 @@ def register_backtesting_tools(mcp, jesse_instance):
             logger.error(f"Strategy validation failed: {e}")
             return {"error": str(e), "valid": False}
 
-    @mcp.tool(name="backtesting:import-candles")
+    @mcp.tool
     def candles_import(
         exchange: str,
         symbol: str,
+        timeframe: str,
         start_date: str,
         end_date: Optional[str] = None,
     ) -> Dict[str, Any]:
@@ -242,6 +243,7 @@ def register_backtesting_tools(mcp, jesse_instance):
             return client.import_candles(
                 exchange=exchange,
                 symbol=symbol,
+                timeframe=timeframe,
                 start_date=start_date,
                 end_date=end_date,
             )

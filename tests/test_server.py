@@ -28,29 +28,24 @@ async def test_tools_list():
         # Verify core tool names are present
         tool_names = {t.name for t in tools}
         core_tools = {
-            # Phase 1: Backtesting (with namespace prefix)
-            "backtesting_status",
-            "backtesting_run",
-            "backtesting_list_strategies",
-            "backtesting_read_strategy",
-            "backtesting_validate",
-            "backtesting_import_candles",
-            # Phase 3: Optimization (with namespace prefix)
-            "optimization_run",
-            "optimization_walk_forward",
-            "optimization_batch",
-            "optimization_analyze",
-            # Phase 4: Risk Analysis (with namespace prefix)
-            "risk_monte_carlo",
-            "risk_var",
-            "risk_stress_test",
+            "jesse_status",
+            "backtest",
+            "strategy_list",
+            "strategy_read",
+            "strategy_validate",
+            "candles_import",
+            "optimize",
+            "walk_forward",
+            "backtest_batch",
+            "analyze_results",
+            "monte_carlo",
+            "var_calculation",
+            "stress_test",
             "risk_report",
-            # Phase 5: Pairs Trading (with namespace prefix)
-            "pairs_correlation",
+            "correlation_matrix",
             "pairs_backtest",
-            "pairs_factors",
-            "pairs_regimes",
-            # Cache Management (with namespace prefix)
+            "factor_analysis",
+            "regime_detector",
             "cache_stats",
             "cache_clear",
         }
