@@ -89,6 +89,9 @@ def poll_backtest_result(
                     if status == "finished":
                         logger.info(f"✅ Backtest {backtest_id[:8]} finished in {elapsed:.1f}s")
                         return get_backtest_session_result(session, base_url, backtest_id)
+                    elif status in ("stopped", "cancelled"):
+                        logger.info(f"⏹️  Backtest {backtest_id[:8]} {status} in {elapsed:.1f}s")
+                        return get_backtest_session_result(session, base_url, backtest_id)
                     elif status == "failed" or status == "error":
                         logger.error(f"❌ Backtest {backtest_id[:8]} failed after {elapsed:.1f}s")
                         return {
