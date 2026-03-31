@@ -133,19 +133,14 @@ def build_optimization_payload(
         "routes": routes,
         "data_routes": data_routes,
         "config": config,
-        "start_date": start_date,
-        "finish_date": end_date,
         "training_start_date": start_date,
         "training_finish_date": end_date,
         "testing_start_date": end_date,
         "testing_finish_date": end_date,
-        "hyperparameters": hyperparameters,
-        "n_trials": n_trials,
-        "max_cpus": 1,
-        "cpu_cores": 1,
         "optimal_total": n_trials,
         "fast_mode": False,
-        "state": "started",
+        "cpu_cores": 1,
+        "state": {},
     }
 
 
