@@ -7,9 +7,9 @@ set -e
 # Get current branch
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
 
-# Only deploy from main branch
-if [ "$BRANCH" != "main" ]; then
-    echo "Not on main branch (currently on $BRANCH), skipping deployment"
+# Only deploy from main or master branch
+if [ "$BRANCH" != "main" ] && [ "$BRANCH" != "master" ]; then
+    echo "Not on main/master branch (currently on $BRANCH), skipping deployment"
     git push "$@"
     exit 0
 fi
