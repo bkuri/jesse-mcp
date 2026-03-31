@@ -480,6 +480,66 @@ class JesseRESTClient:
             logger.error(f"Monte Carlo failed: {e}")
             return {"error": str(e), "success": False}
 
+    def native_monte_carlo(
+        self,
+        strategy: str,
+        symbol: str,
+        timeframe: str,
+        start_date: str,
+        end_date: str,
+        exchange: str = "Binance",
+        starting_balance: float = 10000,
+        fee: float = 0.001,
+        leverage: float = 1,
+        exchange_type: str = "futures",
+        run_trades: bool = True,
+        run_candles: bool = False,
+        num_scenarios: int = 500,
+        cpu_cores: int = 1,
+        fast_mode: bool = True,
+        pipeline_type: str = "moving_block_bootstrap",
+        pipeline_params: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Run native Jesse Monte Carlo simulation via REST API.
+
+        This uses Jesse's built-in Monte Carlo engine which provides:
+        - Confidence analysis with p-values and significance testing
+        - Percentile distributions (5th, 25th, 50th, 75th, 95th)
+        - Structured interpretation output
+        - Two pipeline methods: moving_block_bootstrap and gaussian_noise
+        """
+        try:
+            logger.info(f"Starting native Monte Carlo: {strategy} {symbol} {timeframe}")
+
+            payload = optimization.build_native_monte_carlo_payload(
+                strategy=strategy,
+                symbol=symbol,
+                timeframe=timeframe,
+                start_date=start_date,
+                end_date=end_date,
+                exchange=exchange,
+                starting_balance=starting_balance,
+                fee=fee,
+                leverage=leverage,
+                exchange_type=exchange_type,
+                run_trades=run_trades,
+                run_candles=run_candles,
+                num_scenarios=num_scenarios,
+                cpu_cores=cpu_cores,
+                fast_mode=fast_mode,
+                pipeline_type=pipeline_type,
+                pipeline_params=pipeline_params,
+            )
+
+            result = optimization.rate_limited_monte_carlo(self.session, self.base_url, payload)
+
+            logger.info("Native Monte Carlo simulation completed")
+            return result
+
+        except Exception as e:
+            logger.error(f"Native Monte Carlo failed: {e}")
+            return {"error": str(e), "success": False}
+
     def import_candles(
         self,
         exchange: str,

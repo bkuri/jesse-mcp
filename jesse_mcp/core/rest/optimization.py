@@ -249,3 +249,77 @@ def build_monte_carlo_payload(
     if confidence_levels:
         payload["confidence_levels"] = confidence_levels
     return payload
+
+
+def build_native_monte_carlo_payload(
+    strategy: str,
+    symbol: str,
+    timeframe: str,
+    start_date: str,
+    end_date: str,
+    exchange: str = "Binance",
+    starting_balance: float = 10000,
+    fee: float = 0.001,
+    leverage: float = 1,
+    exchange_type: str = "futures",
+    run_trades: bool = True,
+    run_candles: bool = False,
+    num_scenarios: int = 500,
+    cpu_cores: int = 1,
+    fast_mode: bool = True,
+    pipeline_type: str = "moving_block_bootstrap",
+    pipeline_params: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Build payload for Jesse's native Monte Carlo endpoint.
+
+    This matches the MonteCarloRequestJson schema from Jesse's web API:
+    - run_trades: Shuffle trade order (Monte Carlo on trade sequence)
+    - run_candles: Resample candles (Monte Carlo on price data)
+    - pipeline_type: 'moving_block_bootstrap' or 'gaussian_noise'
+    """
+    routes = [
+        {
+            "exchange": exchange,
+            "strategy": strategy,
+            "symbol": symbol,
+            "timeframe": timeframe,
+        }
+    ]
+
+    data_routes = [
+        {
+            "exchange": exchange,
+            "symbol": symbol,
+            "timeframe": timeframe,
+        }
+    ]
+
+    config = {
+        "starting_balance": starting_balance,
+        "fee": fee,
+        "futures_leverage": leverage,
+        "type": exchange_type,
+        "warm_up_candles": 240,
+    }
+
+    payload: Dict[str, Any] = {
+        "id": str(uuid.uuid4()),
+        "exchange": exchange,
+        "routes": routes,
+        "data_routes": data_routes,
+        "config": config,
+        "start_date": start_date,
+        "finish_date": end_date,
+        "run_trades": run_trades,
+        "run_candles": run_candles,
+        "num_scenarios": num_scenarios,
+        "fast_mode": fast_mode,
+        "cpu_cores": cpu_cores,
+        "pipeline_type": pipeline_type,
+        "state": {},
+    }
+
+    if pipeline_params:
+        payload["pipeline_params"] = pipeline_params
+
+    return payload

@@ -1159,6 +1159,79 @@ async def monte_carlo(
         return {"error": str(e), "error_type": type(e).__name__}
 
 
+@mcp.tool(name="native_monte_carlo")
+async def native_monte_carlo(
+    strategy: str,
+    symbol: str,
+    timeframe: str,
+    start_date: str,
+    end_date: str,
+    exchange: str = "Binance",
+    starting_balance: float = 10000,
+    fee: float = 0.001,
+    leverage: float = 1,
+    exchange_type: str = "futures",
+    run_trades: bool = True,
+    run_candles: bool = False,
+    num_scenarios: int = 500,
+    cpu_cores: int = 1,
+    fast_mode: bool = True,
+    pipeline_type: str = "moving_block_bootstrap",
+) -> Dict[str, Any]:
+    """
+    Run native Jesse Monte Carlo simulation with confidence analysis.
+
+    Uses Jesse's built-in Monte Carlo engine which provides:
+    - Confidence analysis with p-values and significance testing
+    - Percentile distributions (5th, 25th, 50th, 75th, 95th)
+    - Structured interpretation output
+    - Two pipeline methods: moving_block_bootstrap (default) and gaussian_noise
+
+    This is more rigorous than the basic monte_carlo tool as it uses
+    Jesse's native research module with full statistical validation.
+
+    Args:
+        strategy: Strategy name
+        symbol: Trading pair (e.g., "BTC-USDT")
+        timeframe: Candle timeframe (e.g., "1h", "4h")
+        start_date: Start date YYYY-MM-DD
+        end_date: End date YYYY-MM-DD
+        run_trades: Shuffle trade order for robustness check
+        run_candles: Resample candles for price data robustness
+        num_scenarios: Number of simulation scenarios (default: 500)
+        pipeline_type: 'moving_block_bootstrap' or 'gaussian_noise'
+        fast_mode: Enable fast mode for speed (default: True)
+    """
+    try:
+        import asyncio
+        from jesse_mcp.core.jesse_rest_client import get_jesse_rest_client
+
+        client = get_jesse_rest_client()
+        result = await asyncio.to_thread(
+            client.native_monte_carlo,
+            strategy=strategy,
+            symbol=symbol,
+            timeframe=timeframe,
+            start_date=start_date,
+            end_date=end_date,
+            exchange=exchange,
+            starting_balance=starting_balance,
+            fee=fee,
+            leverage=leverage,
+            exchange_type=exchange_type,
+            run_trades=run_trades,
+            run_candles=run_candles,
+            num_scenarios=num_scenarios,
+            cpu_cores=cpu_cores,
+            fast_mode=fast_mode,
+            pipeline_type=pipeline_type,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Native Monte Carlo failed: {e}")
+        return {"error": str(e), "error_type": type(e).__name__, "success": False}
+
+
 @mcp.tool
 async def var_calculation(
     backtest_result: Dict[str, Any],
