@@ -33,7 +33,7 @@ if [ $? -eq 0 ]; then
     # Deploy to server2
     ssh server2-auto << 'ENDSSH'
 set -e
-cd /srv/containers/jesse-baremetal
+cd /srv/containers/jesse-mcp
 echo "  Pulling latest changes..."
 git pull
 echo "  Restarting mcproxy service..."
