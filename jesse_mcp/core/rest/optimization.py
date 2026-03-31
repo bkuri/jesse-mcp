@@ -1,5 +1,6 @@
 """
 Optimization methods for Jesse REST API client.
+ 
 """
 
 import logging
@@ -19,7 +20,6 @@ def rate_limited_optimization(
     payload: dict,
     timeout: int = 600,
 ) -> Dict[str, Any]:
-    """Submit optimization request with rate limiting."""
     limiter = get_rate_limiter()
     if not limiter.acquire():
         return {"error": "Rate limit exceeded", "success": False}
@@ -27,10 +27,10 @@ def rate_limited_optimization(
     if response.status_code == 422:
         try:
             error_detail = response.json()
-            logger.error(f"Jesse API optimization 422: {error_detail}")
-}")
-            raise RuntimeError(f"Jesse API optimization error: {error_detail}")
- * 100)")
+        except Exception:
+            error_detail = {"error": "Unknown 422 error"}
+        logger.error(f"Jesse API optimization 422: {error_detail}")
+        raise RuntimeError(f"Jesse API optimization error: {error_detail}")
     response.raise_for_status()
     return response.json()
 
@@ -41,7 +41,6 @@ def rate_limited_monte_carlo(
     payload: dict,
     timeout: int = 600,
 ) -> Dict[str, Any]:
-    """Submit Monte Carlo simulation request with rate limiting."""
     limiter = get_rate_limiter()
     if not limiter.acquire():
         return {"error": "Rate limit exceeded", "success": False}
@@ -63,7 +62,6 @@ def build_optimization_payload(
     leverage: float = 1,
     exchange_type: str = "futures",
 ) -> Dict[str, Any]:
-    """Build optimization payload matching Jesse 1.13.x format."""
     routes = [
         {
             "exchange": exchange,
@@ -80,7 +78,6 @@ def build_optimization_payload(
             "timeframe": timeframe,
         }
     ]
-
     config = {
         "starting_balance": starting_balance,
         "fee": fee,
@@ -105,34 +102,28 @@ def build_optimization_payload(
     }
 
     hyperparameters = []
-    for name, spec_dict[str, Any]:
-        if not param_space.items():
-            if name == "n_trials":
-                continue
-            hp: {"name": name}
-            if isinstance(spec, (list, tuple)) and len(spec) == 2:
-                if isinstance(spec[0], float) or isinstance(spec[1], float):
-                    hp["type"] = "float"
-                    hp["min"] = spec[0]
-                    hp["max"] = spec[1]
-                else:
-                    hp["type"] = "int"
-                    hp["min"] = spec[0]
-                    hp["max"] = spec[1]
-            elif isinstance(spec, dict):
-                hp["type"] = spec.get("type", "int"
-                hp["min"] = spec.get("min", 1)
-                hp["max"] = spec.get("max", 100)
-                hp["default"] = spec.get("default", (hp["min"] + hp["max"]) // 2)
-            elif isinstance(spec, dict) and spec.get("type") == "float":
+    for name, spec in param_space.items():
+        if name == "n_trials":
+            continue
+        hp = {"name": name}
+        if isinstance(spec, (list, tuple)) and len(spec) == 2:
+            if isinstance(spec[0], float) or isinstance(spec[1], float):
                 hp["type"] = "float"
-                hp["min"] = spec.get("min", 0.0)
-                hp["max"] = spec.get("max", 1.0)
-                hp["default"] = spec.get("default", (hp["min"] + hp["max"]) / 2)
+                hp["min"] = spec[0]
+                hp["max"] = spec[1]
             else:
-                hp["type"] = str(spec.get("type", "str"))
-                hp["default"] = spec.get("default", "")
-            hyperparameters.append(hp)
+                hp["type"] = "int"
+                hp["min"] = spec[0]
+                hp["max"] = spec[1]
+        elif isinstance(spec, dict):
+            hp["type"] = spec.get("type", "int")
+            hp["min"] = spec.get("min", 1)
+            hp["max"] = spec.get("max", 100)
+            hp["default"] = spec.get("default", (hp["min"] + hp["max"]) // 2)
+        else:
+            hp["type"] = str(spec.get("type", "str"))
+            hp["default"] = spec.get("default", "")
+        hyperparameters.append(hp)
 
     n_trials = param_space.get("n_trials") if isinstance(param_space.get("n_trials"), int) else 50
 
@@ -160,14 +151,11 @@ def build_monte_carlo_payload(
     block_size: int = 20,
     confidence_levels: Optional[list] = None,
 ) -> Dict[str, Any]:
-    """Build Monte Carlo simulation payload."""
     payload = {
         "backtest_result": backtest_result,
         "simulations": simulations,
         "block_size": block_size,
     }
-
     if confidence_levels:
         payload["confidence_levels"] = confidence_levels
-
     return payload
