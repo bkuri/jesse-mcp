@@ -33,11 +33,9 @@ if [ $? -eq 0 ]; then
     # Deploy to server2
     ssh server2-auto << 'ENDSSH'
 set -e
-cd /srv/containers/jesse-mcp
+cd /srv/containers/jesse-baremetal
 echo "  Pulling latest changes..."
 git pull
-echo "  Reinstalling package..."
-/srv/containers/jesse-mcp/.venv/bin/python -m pip install -e .
 echo "  Restarting mcproxy service..."
 sudo systemctl restart mcproxy
 sleep 2
