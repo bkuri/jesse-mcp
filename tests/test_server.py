@@ -70,7 +70,7 @@ async def test_backtest_tool():
     transport = StdioTransport(command="python", args=["-m", "jesse_mcp"])
     async with Client(transport) as client:
         result = await client.call_tool(
-            "backtesting_run",
+            "backtest",
             {
                 "strategy": "Test01",
                 "symbol": "BTC-USDT",
@@ -98,7 +98,7 @@ async def test_strategy_list_tool():
 
     transport = StdioTransport(command="python", args=["-m", "jesse_mcp"])
     async with Client(transport) as client:
-        result = await client.call_tool("backtesting_list_strategies", {})
+        result = await client.call_tool("strategy_list", {})
 
         # FastMCP 2.x returns CallToolResult with .data containing the dict
         data = result.data if hasattr(result, "data") else result
@@ -117,7 +117,7 @@ async def test_jesse_status_tool():
 
     transport = StdioTransport(command="python", args=["-m", "jesse_mcp"])
     async with Client(transport) as client:
-        result = await client.call_tool("backtesting_status", {})
+        result = await client.call_tool("jesse_status", {})
 
         data = result.data if hasattr(result, "data") else result
         assert isinstance(data, dict), f"Expected dict, got {type(data)}"
@@ -137,7 +137,7 @@ async def test_optimize_tool():
     transport = StdioTransport(command="python", args=["-m", "jesse_mcp"])
     async with Client(transport) as client:
         result = await client.call_tool(
-            "optimization_run",
+            "optimize",
             {
                 "strategy": "Test01",
                 "symbol": "BTC-USDT",
@@ -166,7 +166,7 @@ async def test_monte_carlo_tool():
     async with Client(transport) as client:
         mock_result = {"trades": [], "metrics": {}, "equity_curve": []}
         result = await client.call_tool(
-            "risk_monte_carlo",
+            "monte_carlo",
             {
                 "backtest_result": mock_result,
                 "simulations": 1000,
