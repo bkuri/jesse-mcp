@@ -54,7 +54,7 @@ def estimate_max_backtest_time(
     estimated_time = total_candles / CONSERVATIVE_CANDLES_PER_SEC
     max_time = estimated_time * safety_factor
 
-    MIN_TIMEOUT = 30
+    MIN_TIMEOUT = 120
     MAX_TIMEOUT = 600
     max_time = max(MIN_TIMEOUT, min(max_time, MAX_TIMEOUT))
 
