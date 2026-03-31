@@ -283,6 +283,7 @@ async def backtest_cancel(
         backtest_id: Optional specific backtest session ID to cancel
     """
     try:
+        import asyncio
         from jesse_mcp.core.jesse_rest_client import get_jesse_rest_client
 
         client = get_jesse_rest_client()
@@ -302,6 +303,7 @@ async def active_workers() -> Dict[str, Any]:
     or to find session IDs for cancellation.
     """
     try:
+        import asyncio
         from jesse_mcp.core.jesse_rest_client import get_jesse_rest_client
 
         client = get_jesse_rest_client()
@@ -991,6 +993,7 @@ async def optimization_cancel(
         optimization_id: Optional specific optimization session ID to cancel
     """
     try:
+        import asyncio
         from jesse_mcp.core.jesse_rest_client import get_jesse_rest_client
 
         client = get_jesse_rest_client()
@@ -1014,6 +1017,7 @@ async def monte_carlo_cancel(
         monte_carlo_id: Optional specific Monte Carlo session ID to cancel
     """
     try:
+        import asyncio
         from jesse_mcp.core.jesse_rest_client import get_jesse_rest_client
 
         client = get_jesse_rest_client()
