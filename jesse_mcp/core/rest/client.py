@@ -59,7 +59,7 @@ class JesseRESTClient:
         elif password:
             self.auth_token = auth.authenticate_with_password(self.session, self.base_url, password)
         else:
-            logger.warning("⚠️ No JESSE_PASSWORD or JESSE_API_TOKEN provided - requests will fail")
+            logger.warning("No JESSE_PASSWORD or JESSE_API_TOKEN provided - requests will fail")
 
         auth.verify_connection(self.session, self.base_url)
 
@@ -162,19 +162,53 @@ class JesseRESTClient:
 
             is_valid, message = backtest.validate_backtest_result(result)
             if not is_valid:
-                logger.warning(f"⚠️  Backtest result validation failed: {message}")
+                logger.warning(f"Backtest result validation failed: {message}")
                 return {
                     "error": f"Invalid backtest result: {message}",
                     "success": False,
                     "raw_result": result,
                 }
 
-            logger.info(f"✅ Backtest completed for {len(routes)} routes")
+            logger.info(f"Backtest completed for {len(routes)} routes")
             return result
 
         except Exception as e:
-            logger.error(f"❌ Backtest failed: {e}")
+            logger.error(f"Backtest failed: {e}")
             return {"error": str(e), "success": False}
+
+    def cancel_backtest(self, backtest_id: Optional[str] = None) -> Dict[str, Any]:
+        """Cancel a running backtest."""
+        return backtest.cancel_backtest(self.session, self.base_url, backtest_id)
+
+    def cancel_optimization(self, optimization_id: Optional[str] = None) -> Dict[str, Any]:
+        """Cancel a running optimization."""
+        return optimization.cancel_optimization(self.session, self.base_url, optimization_id)
+
+    def cancel_monte_carlo(self, monte_carlo_id: Optional[str] = None) -> Dict[str, Any]:
+        """Cancel a running Monte Carlo simulation."""
+        return optimization.cancel_monte_carlo(self.session, self.base_url, monte_carlo_id)
+
+    def get_optimization_session(self, session_id: str) -> Dict[str, Any]:
+        """Get details of a specific optimization session."""
+        return optimization.get_optimization_session(self.session, self.base_url, session_id)
+
+    def get_monte_carlo_sessions(self, limit: int = 50) -> Dict[str, Any]:
+        """Get list of Monte Carlo sessions."""
+        return optimization.get_monte_carlo_sessions(self.session, self.base_url, limit)
+
+    def get_active_workers(self) -> Dict[str, Any]:
+        """Get list of active workers (backtest, optimization, monte carlo)."""
+        try:
+            response = self.session.post(
+                f"{self.base_url}/system/active-workers",
+                json={},
+                timeout=10,
+            )
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            logger.error(f"Failed to get active workers: {e}")
+            return {"error": str(e), "workers": []}
 
     def cached_backtest(
         self,
@@ -230,7 +264,7 @@ class JesseRESTClient:
 
         cached = cache.get(cache_key)
         if cached is not None:
-            logger.info(f"✅ Cache hit for backtest with {len(routes)} routes")
+            logger.info(f"Cache hit for backtest with {len(routes)} routes")
             return cached
 
         result = self.backtest(
@@ -302,7 +336,7 @@ class JesseRESTClient:
                 )
 
                 if "error" not in result and result.get("success", True):
-                    logger.info(f"✅ Backtest succeeded on attempt {attempt + 1}/{max_retries}")
+                    logger.info(f"Backtest succeeded on attempt {attempt + 1}/{max_retries}")
                     return result
 
                 error_msg = result.get("error", "Unknown error")
@@ -310,16 +344,16 @@ class JesseRESTClient:
                     last_error = error_msg
                     if attempt < max_retries - 1:
                         delay = initial_delay * (2**attempt)
-                        logger.warning(f"⚠️  Retryable error: {error_msg}. Retrying in {delay}s...")
+                        logger.warning(f"Retryable error: {error_msg}. Retrying in {delay}s...")
                         time.sleep(delay)
                         continue
                 else:
-                    logger.error(f"❌ Non-retryable error: {error_msg}")
+                    logger.error(f"Non-retryable error: {error_msg}")
                     return result
 
             except requests.exceptions.Timeout:
                 last_error = "Request timeout"
-                logger.warning(f"⚠️  Timeout on attempt {attempt + 1}/{max_retries}")
+                logger.warning(f"Timeout on attempt {attempt + 1}/{max_retries}")
                 if attempt < max_retries - 1:
                     delay = initial_delay * (2**attempt)
                     logger.info(f"Retrying in {delay}s...")
@@ -327,7 +361,7 @@ class JesseRESTClient:
                     continue
             except requests.exceptions.ConnectionError:
                 last_error = "Connection error"
-                logger.warning(f"⚠️  Connection error on attempt {attempt + 1}/{max_retries}")
+                logger.warning(f"Connection error on attempt {attempt + 1}/{max_retries}")
                 if attempt < max_retries - 1:
                     delay = initial_delay * (2**attempt)
                     logger.info(f"Retrying in {delay}s...")
@@ -335,14 +369,14 @@ class JesseRESTClient:
                     continue
             except Exception as e:
                 last_error = str(e)
-                logger.error(f"❌ Unexpected error on attempt {attempt + 1}: {e}")
+                logger.error(f"Unexpected error on attempt {attempt + 1}: {e}")
                 if attempt < max_retries - 1:
                     delay = initial_delay * (2**attempt)
                     logger.info(f"Retrying in {delay}s...")
                     time.sleep(delay)
                     continue
 
-        logger.error(f"❌ All {max_retries} retry attempts failed. Last error: {last_error}")
+        logger.error(f"All {max_retries} retry attempts failed. Last error: {last_error}")
         return {
             "error": f"Backtest failed after {max_retries} retries: {last_error}",
             "success": False,
@@ -357,7 +391,7 @@ class JesseRESTClient:
         cache_key = "strategy_list"
         cached = cache.get(cache_key)
         if cached is not None:
-            logger.info("✅ Cache hit for strategy list")
+            logger.info("Cache hit for strategy list")
             return cached
 
         result = self._fetch_strategies()
@@ -375,7 +409,7 @@ class JesseRESTClient:
                 "message": "Local strategies loaded from filesystem. Use Jesse UI to manage strategies.",
             }
         except Exception as e:
-            logger.error(f"❌ Failed to get strategies: {e}")
+            logger.error(f"Failed to get strategies: {e}")
             return {"error": str(e), "strategies": []}
 
     def optimization(
@@ -412,11 +446,11 @@ class JesseRESTClient:
 
             result = optimization.rate_limited_optimization(self.session, self.base_url, payload)
 
-            logger.info(f"✅ Optimization started for {strategy}")
+            logger.info(f"Optimization started for {strategy}")
             return result
 
         except Exception as e:
-            logger.error(f"❌ Optimization failed: {e}")
+            logger.error(f"Optimization failed: {e}")
             return {"error": str(e), "success": False}
 
     def monte_carlo(
@@ -439,11 +473,11 @@ class JesseRESTClient:
 
             result = optimization.rate_limited_monte_carlo(self.session, self.base_url, payload)
 
-            logger.info("✅ Monte Carlo simulation completed")
+            logger.info("Monte Carlo simulation completed")
             return result
 
         except Exception as e:
-            logger.error(f"❌ Monte Carlo failed: {e}")
+            logger.error(f"Monte Carlo failed: {e}")
             return {"error": str(e), "success": False}
 
     def import_candles(
@@ -460,7 +494,7 @@ class JesseRESTClient:
 
         try:
             candle_id = str(uuid_mod.uuid4())
-            logger.info(f"📥 Importing candles: {exchange} {symbol} {timeframe} from {start_date}")
+            logger.info(f"Importing candles: {exchange} {symbol} {timeframe} from {start_date}")
 
             payload: Dict[str, Any] = {
                 "id": candle_id,
@@ -495,7 +529,7 @@ class JesseRESTClient:
                     if status_resp.status_code == 200:
                         status_data = status_resp.json()
                         if status_data.get("status") == "completed":
-                            logger.info(f"✅ Candle import completed for {exchange} {symbol}")
+                            logger.info(f"Candle import completed for {exchange} {symbol}")
                             return {
                                 "success": True,
                                 "candles_imported": status_data.get("imported_count", 0),
@@ -514,13 +548,13 @@ class JesseRESTClient:
             }
 
         except Exception as e:
-            logger.error(f"❌ Candle import failed: {e}")
+            logger.error(f"Candle import failed: {e}")
             return {"error": str(e), "success": False}
 
     def cancel_import(self, exchange: str, symbol: str) -> Dict[str, Any]:
         """Cancel a running candle import."""
         try:
-            logger.info(f"🚫 Cancelling import: {exchange} {symbol}")
+            logger.info(f"Cancelling import: {exchange} {symbol}")
 
             payload = {
                 "exchange": exchange,
@@ -536,14 +570,14 @@ class JesseRESTClient:
             result = response.json()
 
             if result.get("success", False) or result.get("cancelled", False):
-                logger.info(f"✅ Import cancelled for {exchange} {symbol}")
+                logger.info(f"Import cancelled for {exchange} {symbol}")
             else:
-                logger.warning(f"⚠️ Cancel response: {result.get('message', 'unknown')}")
+                logger.warning(f"Cancel response: {result.get('message', 'unknown')}")
 
             return result
 
         except Exception as e:
-            logger.error(f"❌ Failed to cancel import: {e}")
+            logger.error(f"Failed to cancel import: {e}")
             return {"error": str(e), "success": False}
 
     def get_existing_candles(
@@ -589,7 +623,7 @@ class JesseRESTClient:
     def get_supported_symbols(self, exchange: str) -> Dict[str, Any]:
         """Get list of supported symbols for an exchange."""
         try:
-            logger.info(f"📋 Fetching supported symbols for {exchange}")
+            logger.info(f"Fetching supported symbols for {exchange}")
 
             payload = {"exchange": exchange}
 
@@ -603,12 +637,12 @@ class JesseRESTClient:
 
             symbols = result.get("symbols", result.get("data", []))
             count = len(symbols) if isinstance(symbols, list) else 0
-            logger.info(f"✅ Found {count} symbols for {exchange}")
+            logger.info(f"Found {count} symbols for {exchange}")
 
             return result
 
         except Exception as e:
-            logger.error(f"❌ Failed to get supported symbols: {e}")
+            logger.error(f"Failed to get supported symbols: {e}")
             return {"error": str(e), "symbols": []}
 
     @staticmethod
@@ -639,7 +673,7 @@ class JesseRESTClient:
             response.raise_for_status()
             return response.json()
         except Exception as e:
-            logger.error(f"❌ Failed to get backtest sessions: {e}")
+            logger.error(f"Failed to get backtest sessions: {e}")
             return {"error": str(e), "sessions": []}
 
     def get_optimization_sessions(self) -> Dict[str, Any]:
@@ -650,7 +684,7 @@ class JesseRESTClient:
             response.raise_for_status()
             return response.json()
         except Exception as e:
-            logger.error(f"❌ Failed to get optimization sessions: {e}")
+            logger.error(f"Failed to get optimization sessions: {e}")
             return {"error": str(e), "sessions": []}
 
     def check_live_plugin_available(self) -> Dict[str, Any]:

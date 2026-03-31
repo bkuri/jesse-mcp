@@ -188,6 +188,32 @@ def get_backtest_session_result(
         return {"error": str(e), "success": False}
 
 
+def cancel_backtest(
+    session: requests.Session,
+    base_url: str,
+    backtest_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Cancel a running backtest."""
+    try:
+        payload = {}
+        if backtest_id:
+            payload["id"] = backtest_id
+
+        response = session.post(
+            f"{base_url}/backtest/cancel",
+            json=payload,
+            timeout=10,
+        )
+        response.raise_for_status()
+        result = response.json()
+
+        logger.info(f"Backtest cancel response: {result}")
+        return result
+    except Exception as e:
+        logger.error(f"Failed to cancel backtest: {e}")
+        return {"error": str(e), "success": False}
+
+
 def execute_backtest(
     session: requests.Session,
     base_url: str,

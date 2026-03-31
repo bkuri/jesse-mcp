@@ -145,6 +145,96 @@ def build_optimization_payload(
     }
 
 
+def cancel_optimization(
+    session: requests.Session,
+    base_url: str,
+    optimization_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Cancel a running optimization."""
+    try:
+        payload = {}
+        if optimization_id:
+            payload["id"] = optimization_id
+
+        response = session.post(
+            f"{base_url}/optimization/cancel",
+            json=payload,
+            timeout=10,
+        )
+        response.raise_for_status()
+        result = response.json()
+
+        logger.info(f"Optimization cancel response: {result}")
+        return result
+    except Exception as e:
+        logger.error(f"Failed to cancel optimization: {e}")
+        return {"error": str(e), "success": False}
+
+
+def cancel_monte_carlo(
+    session: requests.Session,
+    base_url: str,
+    monte_carlo_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Cancel a running Monte Carlo simulation."""
+    try:
+        payload = {}
+        if monte_carlo_id:
+            payload["id"] = monte_carlo_id
+
+        response = session.post(
+            f"{base_url}/monte-carlo/cancel",
+            json=payload,
+            timeout=10,
+        )
+        response.raise_for_status()
+        result = response.json()
+
+        logger.info(f"Monte Carlo cancel response: {result}")
+        return result
+    except Exception as e:
+        logger.error(f"Failed to cancel Monte Carlo: {e}")
+        return {"error": str(e), "success": False}
+
+
+def get_optimization_session(
+    session: requests.Session,
+    base_url: str,
+    session_id: str,
+) -> Dict[str, Any]:
+    """Get details of a specific optimization session."""
+    try:
+        response = session.post(
+            f"{base_url}/optimization/sessions/{session_id}",
+            json={},
+            timeout=30,
+        )
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        logger.error(f"Failed to get optimization session: {e}")
+        return {"error": str(e), "success": False}
+
+
+def get_monte_carlo_sessions(
+    session: requests.Session,
+    base_url: str,
+    limit: int = 50,
+) -> Dict[str, Any]:
+    """Get list of Monte Carlo sessions."""
+    try:
+        response = session.post(
+            f"{base_url}/monte-carlo/sessions",
+            json={"limit": limit},
+            timeout=30,
+        )
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        logger.error(f"Failed to get Monte Carlo sessions: {e}")
+        return {"error": str(e), "sessions": []}
+
+
 def build_monte_carlo_payload(
     backtest_result: Dict[str, Any],
     simulations: int = 10000,

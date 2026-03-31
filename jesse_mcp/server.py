@@ -203,6 +203,7 @@ async def backtest(
     include_trades: bool = False,
     include_equity_curve: bool = False,
     include_logs: bool = False,
+    fast_mode: bool = True,
 ) -> Dict[str, Any]:
     """
     Run a single backtest on a strategy with specified parameters.
@@ -214,6 +215,9 @@ async def backtest(
     - Get baseline metrics for comparison
     - As first step before analyze_results, monte_carlo, or risk_report
     - For A/B testing: run backtest twice with different parameters/strategies
+
+    Args:
+        fast_mode: Enable fast mode for orders-of-magnitude speedup (default: True)
 
     Example flow for A/B testing:
     1. backtest(strategy="EMA_original", ...)
@@ -244,6 +248,7 @@ async def backtest(
             include_equity_curve=include_equity_curve,
             include_logs=include_logs,
             auto_import_candles=True,
+            fast_mode=fast_mode,
         )
 
         if result.get("error") or not result.get("success", True):
@@ -262,6 +267,49 @@ async def backtest(
             "error_type": type(e).__name__,
             "success": False,
         }
+
+
+@mcp.tool
+async def backtest_cancel(
+    backtest_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Cancel a running backtest.
+
+    Use this to stop a runaway or stuck backtest. If no backtest_id is provided,
+    cancels the currently running backtest.
+
+    Args:
+        backtest_id: Optional specific backtest session ID to cancel
+    """
+    try:
+        from jesse_mcp.core.jesse_rest_client import get_jesse_rest_client
+
+        client = get_jesse_rest_client()
+        result = await asyncio.to_thread(client.cancel_backtest, backtest_id)
+        return result
+    except Exception as e:
+        logger.error(f"Backtest cancel failed: {e}")
+        return {"error": str(e), "success": False}
+
+
+@mcp.tool
+async def active_workers() -> Dict[str, Any]:
+    """
+    Get list of active workers (running backtests, optimizations, Monte Carlo simulations).
+
+    Use this to check what's currently running before starting new jobs,
+    or to find session IDs for cancellation.
+    """
+    try:
+        from jesse_mcp.core.jesse_rest_client import get_jesse_rest_client
+
+        client = get_jesse_rest_client()
+        result = await asyncio.to_thread(client.get_active_workers)
+        return result
+    except Exception as e:
+        logger.error(f"Active workers check failed: {e}")
+        return {"error": str(e), "workers": []}
 
 
 @mcp.tool
@@ -928,6 +976,52 @@ async def optimize(
     except Exception as e:
         logger.error(f"Optimization failed: {e}")
         return {"error": str(e), "error_type": type(e).__name__}
+
+
+@mcp.tool
+async def optimization_cancel(
+    optimization_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Cancel a running optimization.
+
+    Use this to stop a long-running or stuck optimization session.
+
+    Args:
+        optimization_id: Optional specific optimization session ID to cancel
+    """
+    try:
+        from jesse_mcp.core.jesse_rest_client import get_jesse_rest_client
+
+        client = get_jesse_rest_client()
+        result = await asyncio.to_thread(client.cancel_optimization, optimization_id)
+        return result
+    except Exception as e:
+        logger.error(f"Optimization cancel failed: {e}")
+        return {"error": str(e), "success": False}
+
+
+@mcp.tool
+async def monte_carlo_cancel(
+    monte_carlo_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Cancel a running Monte Carlo simulation.
+
+    Use this to stop a long-running or stuck Monte Carlo session.
+
+    Args:
+        monte_carlo_id: Optional specific Monte Carlo session ID to cancel
+    """
+    try:
+        from jesse_mcp.core.jesse_rest_client import get_jesse_rest_client
+
+        client = get_jesse_rest_client()
+        result = await asyncio.to_thread(client.cancel_monte_carlo, monte_carlo_id)
+        return result
+    except Exception as e:
+        logger.error(f"Monte Carlo cancel failed: {e}")
+        return {"error": str(e), "success": False}
 
 
 @mcp.tool
