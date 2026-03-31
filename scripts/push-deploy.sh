@@ -37,7 +37,7 @@ cd /srv/containers/jesse-mcp
 echo "  Pulling latest changes..."
 git pull
 echo "  Reinstalling package..."
-/srv/containers/jesse-mcp/.venv/bin/pip install -e .
+/srv/containers/jesse-mcp/.venv/bin/python -m pip install -e .
 echo "  Restarting jesse service..."
 sudo systemctl restart jesse
 sleep 2
