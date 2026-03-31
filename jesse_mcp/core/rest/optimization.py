@@ -24,6 +24,13 @@ def rate_limited_optimization(
     if not limiter.acquire():
         return {"error": "Rate limit exceeded", "success": False}
     response = session.post(f"{base_url}/optimization", json=payload, timeout=timeout)
+    if response.status_code == 422:
+        try:
+            error_detail = response.json()
+            logger.error(f"Jesse API optimization 422: {error_detail}")
+}")
+            raise RuntimeError(f"Jesse API optimization error: {error_detail}")
+ * 100)")
     response.raise_for_status()
     return response.json()
 
@@ -98,32 +105,34 @@ def build_optimization_payload(
     }
 
     hyperparameters = []
-    for name, spec in param_space.items():
-        if name == "n_trials":
-            continue
-        hp = {"name": name}
-        if isinstance(spec, (list, tuple)):
-            if len(spec) == 2:
+    for name, spec_dict[str, Any]:
+        if not param_space.items():
+            if name == "n_trials":
+                continue
+            hp: {"name": name}
+            if isinstance(spec, (list, tuple)) and len(spec) == 2:
                 if isinstance(spec[0], float) or isinstance(spec[1], float):
-                    spec = {"type": "float", "min": spec[0], "max": spec[1]}
+                    hp["type"] = "float"
+                    hp["min"] = spec[0]
+                    hp["max"] = spec[1]
                 else:
-                    spec = {"type": "int", "min": spec[0], "max": spec[1]}
+                    hp["type"] = "int"
+                    hp["min"] = spec[0]
+                    hp["max"] = spec[1]
+            elif isinstance(spec, dict):
+                hp["type"] = spec.get("type", "int"
+                hp["min"] = spec.get("min", 1)
+                hp["max"] = spec.get("max", 100)
+                hp["default"] = spec.get("default", (hp["min"] + hp["max"]) // 2)
+            elif isinstance(spec, dict) and spec.get("type") == "float":
+                hp["type"] = "float"
+                hp["min"] = spec.get("min", 0.0)
+                hp["max"] = spec.get("max", 1.0)
+                hp["default"] = spec.get("default", (hp["min"] + hp["max"]) / 2)
             else:
-                spec = {"type": "int", "min": spec[0], "max": spec[0], "step": spec[1] if len(spec) > 2 else 1}
-        if spec.get("type") == "int":
-            hp["type"] = "int"
-            hp["min"] = spec.get("min", 1)
-            hp["max"] = spec.get("max", 100)
-            hp["default"] = spec.get("default", (hp["min"] + hp["max"]) // 2)
-        elif spec.get("type") == "float":
-            hp["type"] = "float"
-            hp["min"] = spec.get("min", 0.0)
-            hp["max"] = spec.get("max", 1.0)
-            hp["default"] = spec.get("default", (hp["min"] + hp["max"]) / 2)
-        else:
-            hp["type"] = str(spec.get("type", "str"))
-            hp["default"] = spec.get("default", "")
-        hyperparameters.append(hp)
+                hp["type"] = str(spec.get("type", "str"))
+                hp["default"] = spec.get("default", "")
+            hyperparameters.append(hp)
 
     n_trials = param_space.get("n_trials") if isinstance(param_space.get("n_trials"), int) else 50
 
@@ -140,6 +149,7 @@ def build_optimization_payload(
         "optimal_total": n_trials,
         "fast_mode": False,
         "cpu_cores": 1,
+        "hyperparameters": hyperparameters,
         "state": {},
     }
 
