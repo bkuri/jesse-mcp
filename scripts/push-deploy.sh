@@ -38,15 +38,15 @@ echo "  Pulling latest changes..."
 git pull
 echo "  Reinstalling package..."
 /srv/containers/jesse-mcp/.venv/bin/python -m pip install -e .
-echo "  Restarting jesse container..."
-sudo podman restart jesse
+echo "  Restarting mcproxy service..."
+sudo systemctl restart mcproxy
 sleep 2
-echo "  Checking container status..."
-if sudo podman ps --format '{{.Names}} {{.Status}}' | grep -q "^jesse "; then
-    echo "  jesse is running"
+echo "  Checking service status..."
+if sudo systemctl is-active --quiet mcproxy; then
+    echo "  mcproxy is running"
 else
-    echo "  jesse failed to start"
-    sudo podman ps -a
+    echo "  mcproxy failed to start"
+    sudo systemctl status mcproxy --no-pager
     exit 1
 fi
 ENDSSH
