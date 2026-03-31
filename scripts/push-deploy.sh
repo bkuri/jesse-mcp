@@ -38,15 +38,15 @@ echo "  Pulling latest changes..."
 git pull
 echo "  Reinstalling package..."
 /srv/containers/jesse-mcp/.venv/bin/python -m pip install -e .
-echo "  Restarting jesse service..."
-sudo systemctl restart jesse
+echo "  Restarting jesse container..."
+sudo podman restart jesse
 sleep 2
-echo "  Checking service status..."
-if sudo systemctl is-active --quiet jesse; then
+echo "  Checking container status..."
+if sudo podman ps --format '{{.Names}} {{.Status}}' | grep -q "^jesse "; then
     echo "  jesse is running"
 else
     echo "  jesse failed to start"
-    sudo systemctl status jesse --no-pager
+    sudo podman ps -a
     exit 1
 fi
 ENDSSH
