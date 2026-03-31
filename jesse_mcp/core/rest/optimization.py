@@ -99,10 +99,15 @@ def build_optimization_payload(
 
     hyperparameters = []
     for name, spec in param_space.items():
+        if name == "n_trials":
+            continue
         hp = {"name": name}
         if isinstance(spec, (list, tuple)):
             if len(spec) == 2:
-                spec = {"type": "int", "min": spec[0], "max": spec[1]}
+                if isinstance(spec[0], float) or isinstance(spec[1], float):
+                    spec = {"type": "float", "min": spec[0], "max": spec[1]}
+                else:
+                    spec = {"type": "int", "min": spec[0], "max": spec[1]}
             else:
                 spec = {"type": "int", "min": spec[0], "max": spec[0], "step": spec[1] if len(spec) > 2 else 1}
         if spec.get("type") == "int":
@@ -129,7 +134,7 @@ def build_optimization_payload(
         "start_date": start_date,
         "finish_date": end_date,
         "hyperparameters": hyperparameters,
-        "n_trials": param_space.get("n_trials", 50),
+        "n_trials": param_space.get("n_trials") if isinstance(param_space.get("n_trials"), int) else 50,
         "max_cpus": 1,
     }
 

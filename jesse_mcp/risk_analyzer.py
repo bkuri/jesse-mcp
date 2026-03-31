@@ -432,6 +432,13 @@ class Phase4RiskAnalyzer:
 
         first = raw_curve[0]
 
+        if isinstance(first, dict) and "data" in first and isinstance(first["data"], list):
+            inner = first["data"]
+            if not inner:
+                return []
+            raw_curve = inner
+            first = inner[0]
+
         if isinstance(first, dict) and "return" in first:
             return raw_curve
 
