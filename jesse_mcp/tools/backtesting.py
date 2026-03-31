@@ -138,56 +138,25 @@ def register_backtesting_tools(mcp, jesse_instance):
                 include_trades=include_trades,
                 include_equity_curve=include_equity_curve,
                 include_logs=include_logs,
+                auto_import_candles=True,
             )
 
-            # Check if result contains an error (validation or execution failure)
             if result.get("error") or not result.get("success", True):
-                logger.warning(
-                    f"Backtest failed, attempting fallback to mock: {result.get('error', 'Unknown error')}"
-                )
-                # Try mock fallback
-                from jesse_mcp.core.mock import get_mock_jesse_wrapper
-
-                mock_wrapper = get_mock_jesse_wrapper()
-                mock_result = mock_wrapper.backtest(
-                    strategy_name=strategy,
-                    symbol=symbol,
-                    timeframe=timeframe,
-                    start_date=start_date,
-                    end_date=end_date,
-                    starting_balance=starting_balance,
-                )
-                mock_result["_mock_data"] = True
-                mock_result["_fallback_reason"] = result.get("error", "Unknown error")
-                logger.info(f"✅ Using mock backtest data for {strategy}")
-                return mock_result
+                logger.error(f"Backtest failed: {result.get('error', 'Unknown error')}")
+                return {
+                    "error": result.get("error", "Backtest failed"),
+                    "error_type": result.get("error_type", "BacktestError"),
+                    "success": False,
+                }
 
             return result
         except Exception as e:
-            logger.warning(f"Backtest failed with exception: {e}, attempting fallback to mock")
-            try:
-                # Fallback to mock implementation
-                from jesse_mcp.core.mock import get_mock_jesse_wrapper
-
-                mock_wrapper = get_mock_jesse_wrapper()
-                mock_result = mock_wrapper.backtest(
-                    strategy_name=strategy,
-                    symbol=symbol,
-                    timeframe=timeframe,
-                    start_date=start_date,
-                    end_date=end_date,
-                    starting_balance=starting_balance,
-                )
-                mock_result["_mock_data"] = True
-                mock_result["_fallback_reason"] = str(e)
-                logger.info(f"✅ Using mock backtest data for {strategy} (fallback)")
-                return mock_result
-            except Exception as mock_error:
-                logger.error(f"Both real and mock backtest failed: {mock_error}")
-                return {
-                    "error": f"Backtest failed: {str(e)}, Mock fallback also failed: {str(mock_error)}",
-                    "error_type": type(e).__name__,
-                }
+            logger.error(f"Backtest failed with exception: {e}")
+            return {
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "success": False,
+            }
 
     @mcp.tool(name="backtesting:list-strategies")
     def strategy_list(include_test_strategies: bool = False) -> Dict[str, Any]:
