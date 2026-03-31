@@ -125,6 +125,8 @@ def build_optimization_payload(
             hp["default"] = spec.get("default", "")
         hyperparameters.append(hp)
 
+    n_trials = param_space.get("n_trials") if isinstance(param_space.get("n_trials"), int) else 50
+
     return {
         "id": str(uuid.uuid4()),
         "exchange": exchange,
@@ -133,9 +135,17 @@ def build_optimization_payload(
         "config": config,
         "start_date": start_date,
         "finish_date": end_date,
+        "training_start_date": start_date,
+        "training_finish_date": end_date,
+        "testing_start_date": end_date,
+        "testing_finish_date": end_date,
         "hyperparameters": hyperparameters,
-        "n_trials": param_space.get("n_trials") if isinstance(param_space.get("n_trials"), int) else 50,
+        "n_trials": n_trials,
         "max_cpus": 1,
+        "cpu_cores": 1,
+        "optimal_total": n_trials,
+        "fast_mode": False,
+        "state": "started",
     }
 
 
