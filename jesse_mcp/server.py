@@ -15,6 +15,7 @@ Tools are registered from modular files in jesse_mcp/tools/:
 """
 
 import logging
+import importlib.metadata
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
@@ -90,9 +91,7 @@ def _initialize_dependencies():
                     globals()[var_name] = instance
                     logger.info(f"✅ {display_name} initialized")
                 else:
-                    logger.warning(
-                        f"⚠️ {display_name} not available - running in mock mode"
-                    )
+                    logger.warning(f"⚠️ {display_name} not available - running in mock mode")
             else:
                 instance = getter()
                 globals()[var_name] = instance
@@ -132,7 +131,7 @@ async def health_endpoint(request: Request) -> JSONResponse:
         {
             "status": "healthy",
             "mcp_server": "jesse-mcp",
-            "version": "1.0.0",
+            "version": importlib.metadata.version("jesse-mcp"),
             "jesse": jesse_status,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
@@ -185,9 +184,7 @@ def main():
     except Exception as e:
         logger.warning(f"⚠️  Agent tools registration failed: {e}")
 
-    parser = argparse.ArgumentParser(
-        description="Jesse MCP Server - Quantitative Trading Analysis"
-    )
+    parser = argparse.ArgumentParser(description="Jesse MCP Server - Quantitative Trading Analysis")
     parser.add_argument(
         "--transport",
         choices=["stdio", "http"],
