@@ -432,7 +432,11 @@ class Phase4RiskAnalyzer:
 
         first = raw_curve[0]
 
-        if isinstance(first, dict) and "data" in first and isinstance(first["data"], list):
+        if (
+            isinstance(first, dict)
+            and "data" in first
+            and isinstance(first["data"], list)
+        ):
             inner = first["data"]
             if not inner:
                 return []
@@ -440,9 +444,11 @@ class Phase4RiskAnalyzer:
             first = inner[0]
 
         if isinstance(first, dict) and "return" in first:
-            return raw_curve
+            return self._validate_and_fix_returns(raw_curve)
 
-        if isinstance(first, dict) and ("value" in first or "time" in first):
+        if isinstance(first, dict) and (
+            "value" in first or "time" in first or "equity" in first
+        ):
             normalized: List[Dict[str, float]] = []
             peak = 0.0
             for i, point in enumerate(raw_curve):
@@ -455,8 +461,14 @@ class Phase4RiskAnalyzer:
                     prev_equity = float(
                         raw_curve[i - 1].get("value", raw_curve[i - 1].get("equity", 0))
                     )
-                    ret = (equity - prev_equity) / prev_equity if prev_equity != 0 else 0.0
-                normalized.append({"return": ret, "equity": equity, "drawdown": drawdown})
+                    ret = (
+                        (equity - prev_equity) / prev_equity
+                        if prev_equity != 0
+                        else 0.0
+                    )
+                normalized.append(
+                    {"return": ret, "equity": equity, "drawdown": drawdown}
+                )
             return normalized
 
         if isinstance(first, (int, float)):
@@ -470,11 +482,102 @@ class Phase4RiskAnalyzer:
                     ret = 0.0
                 else:
                     prev_equity = float(raw_curve[i - 1])
-                    ret = (equity - prev_equity) / prev_equity if prev_equity != 0 else 0.0
-                normalized.append({"return": ret, "equity": equity, "drawdown": drawdown})
+                    ret = (
+                        (equity - prev_equity) / prev_equity
+                        if prev_equity != 0
+                        else 0.0
+                    )
+                normalized.append(
+                    {"return": ret, "equity": equity, "drawdown": drawdown}
+                )
             return normalized
 
         return raw_curve
+
+    def _validate_and_fix_returns(
+        self, curve: List[Dict[str, Any]]
+    ) -> List[Dict[str, float]]:
+        """Validate and fix returns to prevent Monte Carlo overflow.
+
+        Common issues:
+        - 'return' contains absolute equity values (10000-12000) instead of percentages
+        - 'return' values are too large (>1.0) causing exponential overflow
+        - Returns are in wrong scale (e.g., 0.5 means 50% but code uses as 0.5x multiplier)
+
+        Returns valid percentage returns (e.g., 0.01 for 1%).
+        """
+        if not curve:
+            return []
+
+        returns = [point.get("return", 0) for point in curve]
+        equities = [point.get("equity", 0) for point in curve]
+
+        # Check if returns are actually equity values (e.g., 10000, 10002, ...)
+        # by comparing to equity values in the same record
+        if len(curve) > 1:
+            first = curve[0]
+            if "equity" in first:
+                # If return value is close to equity value, it's probably equity, not return
+                if abs(returns[0] - equities[0]) < abs(equities[0] - equities[0]) * 0.1:
+                    logger.warning(
+                        "Detected 'return' field containing equity values instead of percentages. "
+                        "Recalculating returns from equity curve."
+                    )
+                    return self._calculate_returns_from_equity(equities)
+
+        # Check for obviously invalid returns (> 1.0 = 100% per period is unrealistic)
+        max_return = max(abs(r) for r in returns[1:] if r != 0)
+        if max_return > 1.0:
+            logger.warning(
+                f"Detected abnormally large returns (max={max_return:.4f}). "
+                "This may cause Monte Carlo overflow. Clamping to reasonable range."
+            )
+            # Recalculate from equity if available, otherwise clamp
+            if max(equities) > 0:
+                return self._calculate_returns_from_equity(equities)
+            else:
+                # Just clamp the returns
+                clamped = []
+                for r in returns:
+                    if r > 1.0:
+                        clamped.append(1.0)
+                    elif r < -1.0:
+                        clamped.append(-1.0)
+                    else:
+                        clamped.append(r)
+                return [
+                    {"return": r, "equity": e, "drawdown": 0}
+                    for r, e in zip(clamped, equities)
+                ]
+
+        # Return as-is if looks valid
+        return [
+            {"return": r, "equity": e, "drawdown": 0} for r, e in zip(returns, equities)
+        ]
+
+    def _calculate_returns_from_equity(
+        self, equities: List[float]
+    ) -> List[Dict[str, float]]:
+        """Calculate percentage returns from equity values."""
+        if not equities:
+            return []
+
+        normalized = []
+        peak = 0.0
+        for i, equity in enumerate(equities):
+            equity = float(equity)
+            peak = max(peak, equity)
+            drawdown = (peak - equity) / peak if peak > 0 else 0.0
+
+            if i == 0:
+                ret = 0.0
+            else:
+                prev = float(equities[i - 1])
+                ret = (equity - prev) / prev if prev != 0 else 0.0
+
+            normalized.append({"return": ret, "equity": equity, "drawdown": drawdown})
+
+        return normalized
 
     # Helper methods for Monte Carlo
     def _block_bootstrap(self, returns: List[float], block_size: int) -> List[float]:
