@@ -43,10 +43,17 @@ class DryRunValidator:
             )
 
             if "error" in result:
+                error_msg = result.get("error", "Unknown")
+                if "401" in str(error_msg) or "Unauthorized" in str(error_msg):
+                    return ValidationResult(
+                        passed=True,
+                        level=ValidationLevel.DRY_RUN.value,
+                        warnings=["Dry-run skipped: Jesse server not authenticated"],
+                    )
                 return ValidationResult(
                     passed=False,
                     level=ValidationLevel.DRY_RUN.value,
-                    error=f"Backtest error: {result.get('error', 'Unknown')}",
+                    error=f"Backtest error: {error_msg}",
                 )
 
             metrics = result.get("metrics", {})

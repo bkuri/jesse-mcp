@@ -52,11 +52,19 @@ class StaticValidator:
             return ValidationResult(passed=True, level=ValidationLevel.SYNTAX.value)
         except SyntaxError as e:
             logger.warning(f"Syntax error: {e}")
+            fix_hint = None
+            if "expected ':'" in str(e) or "expected '('" in str(e):
+                fix_hint = f"Check line {e.lineno}: ensure proper class/function definition syntax"
+            elif "unexpected EOF" in str(e) or "unexpected indent" in str(e):
+                fix_hint = f"Check line {e.lineno}: verify indentation and brackets are balanced"
+            else:
+                fix_hint = f"Fix syntax error on line {e.lineno}: {e.msg}"
             return ValidationResult(
                 passed=False,
                 level=ValidationLevel.SYNTAX.value,
                 error=str(e),
                 line=e.lineno,
+                fix_hint=fix_hint,
             )
 
     def validate_imports(self, code: str) -> ValidationResult:
@@ -66,12 +74,19 @@ class StaticValidator:
             "import jesse.indicators as ta" in code or "from jesse import indicators as ta" in code
         )
 
-        if has_strategy_import and has_ta_import:
-            return ValidationResult(passed=True, level=ValidationLevel.IMPORTS.value)
+        if has_strategy_import:
+            warnings = []
+            if not has_ta_import and "ta." in code:
+                warnings.append("Code uses ta.* but missing 'import jesse.indicators as ta'")
+            elif not has_ta_import:
+                warnings.append(
+                    "Consider adding 'import jesse.indicators as ta' for indicator access"
+                )
+            return ValidationResult(
+                passed=True, level=ValidationLevel.IMPORTS.value, warnings=warnings
+            )
 
-        missing = []
-        if not has_strategy_import:
-            missing.append("from jesse.strategies import Strategy")
+        missing = ["from jesse.strategies import Strategy"]
         if not has_ta_import:
             missing.append("import jesse.indicators as ta")
 
@@ -84,11 +99,20 @@ class StaticValidator:
     def validate_structure(self, code: str) -> ValidationResult:
         """Validate class structure (inherits from Strategy)."""
         class_match = re.search(r"class\s+(\w+)\s*\(([^)]*)\)\s*:", code)
-        if not class_match:
+        class_match_no_parens = re.search(r"class\s+(\w+)\s*:", code)
+        if not class_match and not class_match_no_parens:
             return ValidationResult(
                 passed=False,
                 level=ValidationLevel.STRUCTURE.value,
                 error="No class definition found",
+            )
+        if not class_match and class_match_no_parens:
+            class_name = class_match_no_parens.group(1)
+            return ValidationResult(
+                passed=False,
+                level=ValidationLevel.STRUCTURE.value,
+                error=f"Class {class_name} must inherit from Strategy",
+                fix_hint=f"class {class_name}(Strategy):",
             )
 
         class_name = class_match.group(1)

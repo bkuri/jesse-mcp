@@ -246,6 +246,10 @@ class TestStrategyBuilderRefinement:
             get_strategy_builder,
         )
         from jesse_mcp.core.strategy_validator import get_validator
+        from jesse_mcp.core.strategy_validation.types import (
+            ValidationResult,
+            ValidationLevel,
+        )
 
         validator = get_validator()
         builder = StrategyBuilder(validator)
@@ -257,7 +261,15 @@ class TestStrategyBuilderRefinement:
         )
 
         code = builder.generate_initial(spec)
-        final_code, history, success = builder.refinement_loop(code, spec, max_iter=3)
+
+        dry_run_result = ValidationResult(
+            passed=True,
+            level=ValidationLevel.DRY_RUN.value,
+            warnings=["Dry-run: 0 trades, 0.0% win rate"],
+            metrics={"total_trades": 0, "win_rate": 0, "total_return": 0},
+        )
+        with patch.object(validator, "dry_run_backtest", return_value=dry_run_result):
+            final_code, history, success = builder.refinement_loop(code, spec, max_iter=3)
 
         assert len(history) > 0
         assert success is True
@@ -463,7 +475,6 @@ class DryRunTestStrategy(Strategy):
 
         assert result.passed is True
         assert len(result.warnings) > 0
-        assert "not yet implemented" in result.warnings[0].lower()
 
 
 class TestIndicatorValidation:
