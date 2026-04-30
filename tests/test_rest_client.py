@@ -407,6 +407,62 @@ class TestBacktest:
             assert "error" in result
             assert result["success"] is False
 
+    def test_backtest_with_benchmark_enabled(self):
+        """Test backtest with benchmark=True flows to payload"""
+        from jesse_mcp.core.rest import JesseRESTClient
+
+        client = JesseRESTClient.__new__(JesseRESTClient)
+        client.base_url = "http://test:8000"
+        client.session = Mock()
+        client.session.post.return_value = Mock(
+            status_code=200,
+            json=lambda: {"total_return": 0.25, "success": True},
+            raise_for_status=Mock(),
+        )
+
+        with patch("jesse_mcp.core.rest.client.get_rate_limiter") as mock_limiter:
+            mock_limiter.return_value = Mock(acquire=Mock(return_value=True))
+            with patch("jesse_mcp.core.rest.candles.validate_candle_data", return_value=None):
+                result = client.backtest(
+                    routes=[{"strategy": "TestStrategy", "symbol": "BTC-USDT", "timeframe": "1h"}],
+                    start_date="2023-01-01",
+                    end_date="2023-12-31",
+                    benchmark=True,
+                )
+
+                call_args = client.session.post.call_args
+                payload = call_args[1]["json"]
+                assert payload["benchmark"] is True
+
+    def test_backtest_with_candles_pipeline_params(self):
+        """Test backtest with candles_pipeline_class and kwargs"""
+        from jesse_mcp.core.rest import JesseRESTClient
+
+        client = JesseRESTClient.__new__(JesseRESTClient)
+        client.base_url = "http://test:8000"
+        client.session = Mock()
+        client.session.post.return_value = Mock(
+            status_code=200,
+            json=lambda: {"total_return": 0.25, "success": True},
+            raise_for_status=Mock(),
+        )
+
+        with patch("jesse_mcp.core.rest.client.get_rate_limiter") as mock_limiter:
+            mock_limiter.return_value = Mock(acquire=Mock(return_value=True))
+            with patch("jesse_mcp.core.rest.candles.validate_candle_data", return_value=None):
+                result = client.backtest(
+                    routes=[{"strategy": "TestStrategy", "symbol": "BTC-USDT", "timeframe": "1h"}],
+                    start_date="2023-01-01",
+                    end_date="2023-12-31",
+                    candles_pipeline_class="CustomPipeline",
+                    candles_pipeline_kwargs={"param1": "value1"},
+                )
+
+                call_args = client.session.post.call_args
+                payload = call_args[1]["json"]
+                assert payload["candles_pipeline_class"] == "CustomPipeline"
+                assert payload["candles_pipeline_kwargs"] == {"param1": "value1"}
+
 
 class TestOptimization:
     """Tests for optimization method"""
@@ -901,6 +957,25 @@ class TestValidateBacktestResult:
         is_valid, message = backtest.validate_backtest_result(result)
         assert not is_valid
         assert "numeric" in message.lower()
+
+    def test_validate_success_with_max_underwater_period(self):
+        """Test validation passes with max_underwater_period metric"""
+        from jesse_mcp.core.rest import backtest
+
+        result = {"max_underwater_period": 45}
+
+        is_valid, message = backtest.validate_backtest_result(result)
+        assert is_valid
+        assert "passed" in message.lower()
+
+    def test_validate_success_with_directional_win_rates(self):
+        """Test validation passes with win_rate_long/win_rate_short"""
+        from jesse_mcp.core.rest import backtest
+
+        result = {"win_rate_long": 0.60, "win_rate_short": 0.45}
+
+        is_valid, message = backtest.validate_backtest_result(result)
+        assert is_valid
 
 
 class TestBacktestWithRetry:

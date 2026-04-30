@@ -90,6 +90,9 @@ def register_backtesting_tools(mcp):
         include_equity_curve: bool = False,
         include_logs: bool = False,
         fast_mode: bool = True,
+        benchmark: bool = False,
+        candles_pipeline_class: Optional[str] = None,
+        candles_pipeline_kwargs: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Run a single backtest on a strategy with specified parameters.
@@ -104,6 +107,9 @@ def register_backtesting_tools(mcp):
 
         Args:
             fast_mode: Enable fast mode for orders-of-magnitude speedup (default: True)
+            benchmark: Enable benchmark mode for buy-and-hold comparison (default: False)
+            candles_pipeline_class: Custom candles pipeline class name (default: None)
+            candles_pipeline_kwargs: Additional kwargs for candles pipeline (default: None)
         """
         client = get_client()
         if client is None:
@@ -126,6 +132,9 @@ def register_backtesting_tools(mcp):
             include_logs=include_logs,
             auto_import_candles=True,
             fast_mode=fast_mode,
+            benchmark=benchmark,
+            candles_pipeline_class=candles_pipeline_class,
+            candles_pipeline_kwargs=candles_pipeline_kwargs,
         )
 
         if result.get("error") or not result.get("success", True):

@@ -162,3 +162,110 @@ def register_risk_tools(mcp):
             monte_carlo_sims=monte_carlo_sims,
             report_format=report_format,
         )
+
+    @mcp.tool
+    @tool_error_handler
+    def plot_significance_test(
+        strategy: str,
+        symbol: str,
+        timeframe: str,
+        start_date: str,
+        end_date: str,
+        exchange: str = "Binance",
+        starting_balance: float = 10000,
+        fee: float = 0.001,
+        leverage: float = 1,
+        exchange_type: str = "futures",
+        hyperparameters: Optional[Dict[str, Any]] = None,
+        n_bootstrap: int = 1000,
+        output_path: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Generate bootstrap significance test histogram as PNG chart.
+
+        Creates a histogram of the bootstrap sampling distribution with the
+        observed mean annotated, saved as a PNG file. Requires local Jesse installation.
+
+        Use alongside rule_significance_test() for visual analysis of whether
+        a strategy's performance is statistically significant.
+
+        Args:
+            strategy: Strategy name to test
+            symbol: Trading pair (e.g., "BTC-USDT")
+            timeframe: Candle timeframe (e.g., "1h", "4h")
+            start_date: Start date YYYY-MM-DD
+            end_date: End date YYYY-MM-DD
+            exchange: Exchange name (default: Binance)
+            n_bootstrap: Number of bootstrap samples (default: 1000)
+            output_path: Optional custom path for the PNG file
+        """
+        from jesse_mcp.tools._utils import require_jesse
+
+        return require_jesse().plot_significance_test(
+            strategy=strategy,
+            symbol=symbol,
+            timeframe=timeframe,
+            start_date=start_date,
+            end_date=end_date,
+            exchange=exchange,
+            starting_balance=starting_balance,
+            fee=fee,
+            leverage=leverage,
+            exchange_type=exchange_type,
+            hyperparameters=hyperparameters,
+            n_bootstrap=n_bootstrap,
+            output_path=output_path,
+        )
+
+    @mcp.tool
+    @tool_error_handler
+    def rule_significance_test(
+        strategy: str,
+        symbol: str,
+        timeframe: str,
+        start_date: str,
+        end_date: str,
+        exchange: str = "Binance",
+        starting_balance: float = 10000,
+        fee: float = 0.001,
+        leverage: float = 1,
+        exchange_type: str = "futures",
+        hyperparameters: Optional[Dict[str, Any]] = None,
+        n_bootstrap: int = 1000,
+    ) -> Dict[str, Any]:
+        """
+        Run bootstrap-based statistical significance test for a trading rule.
+
+        Evaluates whether a strategy's mean return is statistically distinguishable
+        from random noise using bootstrap resampling. Requires local Jesse installation.
+
+        Returns p-value, observed mean return, bootstrap distribution stats, and
+        whether the result is statistically significant.
+
+        Use this to validate that backtest results represent real alpha, not luck.
+
+        Args:
+            strategy: Strategy name to test
+            symbol: Trading pair (e.g., "BTC-USDT")
+            timeframe: Candle timeframe (e.g., "1h", "4h")
+            start_date: Start date YYYY-MM-DD
+            end_date: End date YYYY-MM-DD
+            exchange: Exchange name (default: Binance)
+            n_bootstrap: Number of bootstrap samples (default: 1000)
+        """
+        from jesse_mcp.tools._utils import require_jesse
+
+        return require_jesse().rule_significance_test(
+            strategy=strategy,
+            symbol=symbol,
+            timeframe=timeframe,
+            start_date=start_date,
+            end_date=end_date,
+            exchange=exchange,
+            starting_balance=starting_balance,
+            fee=fee,
+            leverage=leverage,
+            exchange_type=exchange_type,
+            hyperparameters=hyperparameters,
+            n_bootstrap=n_bootstrap,
+        )

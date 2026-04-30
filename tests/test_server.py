@@ -42,6 +42,8 @@ async def test_tools_list():
             "var_calculation",
             "stress_test",
             "risk_report",
+            "rule_significance_test",
+            "plot_significance_test",
             "correlation_matrix",
             "pairs_backtest",
             "factor_analysis",

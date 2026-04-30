@@ -35,6 +35,9 @@ def backtest(
     auto_import_candles: bool = False,
     auto_import_max_candles: int = 50000,
     fast_mode: bool = True,
+    benchmark: bool = False,
+    candles_pipeline_class: Optional[str] = None,
+    candles_pipeline_kwargs: Optional[Dict[str, Any]] = None,
     candles_module=None,
     backtest_helpers=None,
     backtest_api=None,
@@ -77,6 +80,9 @@ def backtest(
             include_logs=include_logs,
             include_trades=include_trades,
             fast_mode=fast_mode,
+            benchmark=benchmark,
+            candles_pipeline_class=candles_pipeline_class,
+            candles_pipeline_kwargs=candles_pipeline_kwargs,
         )
 
         result = bt_api.execute_backtest(session, base_url, payload)
@@ -117,6 +123,9 @@ def cached_backtest(
     auto_import_candles: bool = False,
     auto_import_max_candles: int = 50000,
     fast_mode: bool = True,
+    benchmark: bool = False,
+    candles_pipeline_class: Optional[str] = None,
+    candles_pipeline_kwargs: Optional[Dict[str, Any]] = None,
     backtest_func=None,
 ) -> Dict[str, Any]:
     """Run a backtest with caching support (1 hour TTL by default)."""
@@ -138,6 +147,9 @@ def cached_backtest(
             include_trades=include_trades,
             include_equity_curve=include_equity_curve,
             include_logs=include_logs,
+            benchmark=benchmark,
+            candles_pipeline_class=candles_pipeline_class,
+            candles_pipeline_kwargs=candles_pipeline_kwargs,
         )
 
     cache = get_backtest_cache()
@@ -180,6 +192,9 @@ def cached_backtest(
         auto_import_candles=auto_import_candles,
         auto_import_max_candles=auto_import_max_candles,
         fast_mode=fast_mode,
+        benchmark=benchmark,
+        candles_pipeline_class=candles_pipeline_class,
+        candles_pipeline_kwargs=candles_pipeline_kwargs,
     )
 
     if "error" not in result:
@@ -207,6 +222,9 @@ def backtest_with_retry(
     auto_import_candles: bool = False,
     auto_import_max_candles: int = 50000,
     fast_mode: bool = True,
+    benchmark: bool = False,
+    candles_pipeline_class: Optional[str] = None,
+    candles_pipeline_kwargs: Optional[Dict[str, Any]] = None,
     backtest_func=None,
     is_retryable_func=None,
 ) -> Dict[str, Any]:
@@ -222,7 +240,9 @@ def backtest_with_retry(
 
     for attempt in range(max_retries):
         try:
-            logger.info(f"Backtest attempt {attempt + 1}/{max_retries}: {len(routes)} routes")
+            logger.info(
+                f"Backtest attempt {attempt + 1}/{max_retries}: {len(routes)} routes"
+            )
 
             result = bt_func(
                 session=session,
@@ -240,10 +260,15 @@ def backtest_with_retry(
                 auto_import_candles=auto_import_candles,
                 auto_import_max_candles=auto_import_max_candles,
                 fast_mode=fast_mode,
+                benchmark=benchmark,
+                candles_pipeline_class=candles_pipeline_class,
+                candles_pipeline_kwargs=candles_pipeline_kwargs,
             )
 
             if "error" not in result and result.get("success", True):
-                logger.info(f"✅ Backtest succeeded on attempt {attempt + 1}/{max_retries}")
+                logger.info(
+                    f"✅ Backtest succeeded on attempt {attempt + 1}/{max_retries}"
+                )
                 return result
 
             error_msg = result.get("error", "Unknown error")
@@ -251,7 +276,9 @@ def backtest_with_retry(
                 last_error = error_msg
                 if attempt < max_retries - 1:
                     delay = initial_delay * (2**attempt)
-                    logger.warning(f"⚠️  Retryable error: {error_msg}. Retrying in {delay}s...")
+                    logger.warning(
+                        f"⚠️  Retryable error: {error_msg}. Retrying in {delay}s..."
+                    )
                     time.sleep(delay)
                     continue
             else:
@@ -267,7 +294,9 @@ def backtest_with_retry(
                 time.sleep(delay)
                 continue
 
-    logger.error(f"❌ All {max_retries} retry attempts failed. Last error: {last_error}")
+    logger.error(
+        f"❌ All {max_retries} retry attempts failed. Last error: {last_error}"
+    )
     return {
         "error": f"Backtest failed after {max_retries} retries: {last_error}",
         "success": False,

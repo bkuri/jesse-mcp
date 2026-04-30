@@ -79,9 +79,22 @@ def validate_backtest_result(result: Dict[str, Any]) -> tuple:
     if not result:
         return False, "Result is empty"
 
-    metric_fields = ["total_return", "sharpe_ratio", "max_drawdown", "win_rate", "total_trades"]
+    metric_fields = [
+        "total_return",
+        "sharpe_ratio",
+        "max_drawdown",
+        "win_rate",
+        "total_trades",
+        "max_underwater_period",
+        "win_rate_long",
+        "win_rate_short",
+    ]
     has_metrics = any(f in result for f in metric_fields)
-    if not has_metrics and not result.get("success") and result.get("status") != "finished":
+    if (
+        not has_metrics
+        and not result.get("success")
+        and result.get("status") != "finished"
+    ):
         return False, f"Result missing all metric fields: {', '.join(metric_fields)}"
 
     for field in metric_fields:
@@ -123,6 +136,9 @@ def build_backtest_payload(
     include_logs: bool = False,
     include_trades: bool = False,
     fast_mode: bool = True,
+    benchmark: bool = False,
+    candles_pipeline_class: Optional[str] = None,
+    candles_pipeline_kwargs: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Build backtest payload matching Jesse 1.13.x format."""
     formatted_routes = [
@@ -236,5 +252,7 @@ def build_backtest_payload(
         "export_chart": False,
         "export_tradingview": False,
         "fast_mode": True,
-        "benchmark": False,
+        "benchmark": benchmark,
+        "candles_pipeline_class": candles_pipeline_class,
+        "candles_pipeline_kwargs": candles_pipeline_kwargs,
     }

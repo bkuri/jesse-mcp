@@ -87,6 +87,8 @@ class E2ETestSuite:
                 "var_calculation",
                 "stress_test",
                 "risk_report",
+                "rule_significance_test",
+                "plot_significance_test",
                 "correlation_matrix",
                 "pairs_backtest",
                 "factor_analysis",

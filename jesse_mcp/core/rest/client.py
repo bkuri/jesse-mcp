@@ -55,11 +55,17 @@ class JesseRESTClient:
         self.auth_token = None
 
         if api_token:
-            self.auth_token = auth.authenticate_with_token(self.session, self.base_url, api_token)
+            self.auth_token = auth.authenticate_with_token(
+                self.session, self.base_url, api_token
+            )
         elif password:
-            self.auth_token = auth.authenticate_with_password(self.session, self.base_url, password)
+            self.auth_token = auth.authenticate_with_password(
+                self.session, self.base_url, password
+            )
         else:
-            logger.warning("No JESSE_PASSWORD or JESSE_API_TOKEN provided - requests will fail")
+            logger.warning(
+                "No JESSE_PASSWORD or JESSE_API_TOKEN provided - requests will fail"
+            )
 
         auth.verify_connection(self.session, self.base_url)
 
@@ -95,7 +101,9 @@ class JesseRESTClient:
 
         if result["connected"]:
             try:
-                strategies_response = self.session.get(f"{self.base_url}/strategies", timeout=5)
+                strategies_response = self.session.get(
+                    f"{self.base_url}/strategies", timeout=5
+                )
                 if strategies_response.status_code == 200:
                     strategies_data = strategies_response.json()
                     if isinstance(strategies_data, list):
@@ -126,6 +134,9 @@ class JesseRESTClient:
         auto_import_candles: bool = False,
         auto_import_max_candles: int = 50000,
         fast_mode: bool = True,
+        benchmark: bool = False,
+        candles_pipeline_class: Optional[str] = None,
+        candles_pipeline_kwargs: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Run a backtest via Jesse REST API."""
         try:
@@ -156,6 +167,9 @@ class JesseRESTClient:
                 include_logs=include_logs,
                 include_trades=include_trades,
                 fast_mode=fast_mode,
+                benchmark=benchmark,
+                candles_pipeline_class=candles_pipeline_class,
+                candles_pipeline_kwargs=candles_pipeline_kwargs,
             )
 
             result = backtest.execute_backtest(self.session, self.base_url, payload)
@@ -180,17 +194,27 @@ class JesseRESTClient:
         """Cancel a running backtest."""
         return backtest.cancel_backtest(self.session, self.base_url, backtest_id)
 
-    def cancel_optimization(self, optimization_id: Optional[str] = None) -> Dict[str, Any]:
+    def cancel_optimization(
+        self, optimization_id: Optional[str] = None
+    ) -> Dict[str, Any]:
         """Cancel a running optimization."""
-        return optimization.cancel_optimization(self.session, self.base_url, optimization_id)
+        return optimization.cancel_optimization(
+            self.session, self.base_url, optimization_id
+        )
 
-    def cancel_monte_carlo(self, monte_carlo_id: Optional[str] = None) -> Dict[str, Any]:
+    def cancel_monte_carlo(
+        self, monte_carlo_id: Optional[str] = None
+    ) -> Dict[str, Any]:
         """Cancel a running Monte Carlo simulation."""
-        return optimization.cancel_monte_carlo(self.session, self.base_url, monte_carlo_id)
+        return optimization.cancel_monte_carlo(
+            self.session, self.base_url, monte_carlo_id
+        )
 
     def get_optimization_session(self, session_id: str) -> Dict[str, Any]:
         """Get details of a specific optimization session."""
-        return optimization.get_optimization_session(self.session, self.base_url, session_id)
+        return optimization.get_optimization_session(
+            self.session, self.base_url, session_id
+        )
 
     def get_monte_carlo_sessions(self, limit: int = 50) -> Dict[str, Any]:
         """Get list of Monte Carlo sessions."""
@@ -259,7 +283,11 @@ class JesseRESTClient:
             leverage,
             exchange_type,
             json.dumps(data_routes or [], sort_keys=True) if data_routes else "",
-            json.dumps(hyperparameters or {}, sort_keys=True) if hyperparameters else "",
+            (
+                json.dumps(hyperparameters or {}, sort_keys=True)
+                if hyperparameters
+                else ""
+            ),
         )
 
         cached = cache.get(cache_key)
@@ -317,7 +345,9 @@ class JesseRESTClient:
 
         for attempt in range(max_retries):
             try:
-                logger.info(f"Backtest attempt {attempt + 1}/{max_retries}: {len(routes)} routes")
+                logger.info(
+                    f"Backtest attempt {attempt + 1}/{max_retries}: {len(routes)} routes"
+                )
 
                 result = self.backtest(
                     routes=routes,
@@ -336,7 +366,9 @@ class JesseRESTClient:
                 )
 
                 if "error" not in result and result.get("success", True):
-                    logger.info(f"Backtest succeeded on attempt {attempt + 1}/{max_retries}")
+                    logger.info(
+                        f"Backtest succeeded on attempt {attempt + 1}/{max_retries}"
+                    )
                     return result
 
                 error_msg = result.get("error", "Unknown error")
@@ -344,7 +376,9 @@ class JesseRESTClient:
                     last_error = error_msg
                     if attempt < max_retries - 1:
                         delay = initial_delay * (2**attempt)
-                        logger.warning(f"Retryable error: {error_msg}. Retrying in {delay}s...")
+                        logger.warning(
+                            f"Retryable error: {error_msg}. Retrying in {delay}s..."
+                        )
                         time.sleep(delay)
                         continue
                 else:
@@ -361,7 +395,9 @@ class JesseRESTClient:
                     continue
             except requests.exceptions.ConnectionError:
                 last_error = "Connection error"
-                logger.warning(f"Connection error on attempt {attempt + 1}/{max_retries}")
+                logger.warning(
+                    f"Connection error on attempt {attempt + 1}/{max_retries}"
+                )
                 if attempt < max_retries - 1:
                     delay = initial_delay * (2**attempt)
                     logger.info(f"Retrying in {delay}s...")
@@ -376,7 +412,9 @@ class JesseRESTClient:
                     time.sleep(delay)
                     continue
 
-        logger.error(f"All {max_retries} retry attempts failed. Last error: {last_error}")
+        logger.error(
+            f"All {max_retries} retry attempts failed. Last error: {last_error}"
+        )
         return {
             "error": f"Backtest failed after {max_retries} retries: {last_error}",
             "success": False,
@@ -444,7 +482,9 @@ class JesseRESTClient:
                 exchange_type=exchange_type,
             )
 
-            result = optimization.rate_limited_optimization(self.session, self.base_url, payload)
+            result = optimization.rate_limited_optimization(
+                self.session, self.base_url, payload
+            )
 
             logger.info(f"Optimization started for {strategy}")
             return result
@@ -471,7 +511,9 @@ class JesseRESTClient:
                 confidence_levels=confidence_levels,
             )
 
-            result = optimization.rate_limited_monte_carlo(self.session, self.base_url, payload)
+            result = optimization.rate_limited_monte_carlo(
+                self.session, self.base_url, payload
+            )
 
             logger.info("Monte Carlo simulation completed")
             return result
@@ -531,7 +573,9 @@ class JesseRESTClient:
                 pipeline_params=pipeline_params,
             )
 
-            result = optimization.rate_limited_monte_carlo(self.session, self.base_url, payload)
+            result = optimization.rate_limited_monte_carlo(
+                self.session, self.base_url, payload
+            )
 
             logger.info("Native Monte Carlo simulation completed")
             return result
@@ -554,7 +598,9 @@ class JesseRESTClient:
 
         try:
             candle_id = str(uuid_mod.uuid4())
-            logger.info(f"Importing candles: {exchange} {symbol} {timeframe} from {start_date}")
+            logger.info(
+                f"Importing candles: {exchange} {symbol} {timeframe} from {start_date}"
+            )
 
             payload: Dict[str, Any] = {
                 "id": candle_id,
@@ -589,10 +635,14 @@ class JesseRESTClient:
                     if status_resp.status_code == 200:
                         status_data = status_resp.json()
                         if status_data.get("status") == "completed":
-                            logger.info(f"Candle import completed for {exchange} {symbol}")
+                            logger.info(
+                                f"Candle import completed for {exchange} {symbol}"
+                            )
                             return {
                                 "success": True,
-                                "candles_imported": status_data.get("imported_count", 0),
+                                "candles_imported": status_data.get(
+                                    "imported_count", 0
+                                ),
                             }
                         elif status_data.get("status") == "failed":
                             return {
@@ -646,7 +696,9 @@ class JesseRESTClient:
         symbol: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Get list of existing candles with date ranges."""
-        return candles.get_existing_candles(self.session, self.base_url, exchange, symbol)
+        return candles.get_existing_candles(
+            self.session, self.base_url, exchange, symbol
+        )
 
     def get_candles(
         self,
@@ -674,7 +726,9 @@ class JesseRESTClient:
         timeframe: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Delete candle data for a specific exchange/symbol."""
-        return candles.delete_candles(self.session, self.base_url, exchange, symbol, timeframe)
+        return candles.delete_candles(
+            self.session, self.base_url, exchange, symbol, timeframe
+        )
 
     def clear_candles_cache(self) -> Dict[str, Any]:
         """Clear the candles database cache."""
@@ -729,7 +783,9 @@ class JesseRESTClient:
         """Get list of backtest sessions."""
         try:
             payload = {"limit": 50, "offset": 0}
-            response = self.session.post(f"{self.base_url}/backtest/sessions", json=payload)
+            response = self.session.post(
+                f"{self.base_url}/backtest/sessions", json=payload
+            )
             response.raise_for_status()
             return response.json()
         except Exception as e:
@@ -740,7 +796,9 @@ class JesseRESTClient:
         """Get list of optimization sessions."""
         try:
             payload = {"limit": 50, "offset": 0}
-            response = self.session.post(f"{self.base_url}/optimization/sessions", json=payload)
+            response = self.session.post(
+                f"{self.base_url}/optimization/sessions", json=payload
+            )
             response.raise_for_status()
             return response.json()
         except Exception as e:
@@ -782,9 +840,13 @@ class JesseRESTClient:
             data_routes=data_routes,
         )
 
-    def cancel_live_session(self, session_id: str, paper_mode: bool = True) -> Dict[str, Any]:
+    def cancel_live_session(
+        self, session_id: str, paper_mode: bool = True
+    ) -> Dict[str, Any]:
         """Cancel a running live trading session."""
-        return live.cancel_live_session(self.session, self.base_url, session_id, paper_mode)
+        return live.cancel_live_session(
+            self.session, self.base_url, session_id, paper_mode
+        )
 
     def get_live_sessions(self, limit: int = 50, offset: int = 0) -> Dict[str, Any]:
         """Get list of live trading sessions."""
@@ -801,7 +863,9 @@ class JesseRESTClient:
         start_time: int = 0,
     ) -> Dict[str, Any]:
         """Get logs for a live trading session."""
-        return live.get_live_logs(self.session, self.base_url, session_id, log_type, start_time)
+        return live.get_live_logs(
+            self.session, self.base_url, session_id, log_type, start_time
+        )
 
     def get_live_orders(self, session_id: str) -> Dict[str, Any]:
         """Get orders for a live trading session."""
@@ -836,7 +900,9 @@ class JesseRESTClient:
 
     def update_live_session_notes(self, session_id: str, notes: str) -> Dict[str, Any]:
         """Update notes for a live trading session."""
-        return live.update_live_session_notes(self.session, self.base_url, session_id, notes)
+        return live.update_live_session_notes(
+            self.session, self.base_url, session_id, notes
+        )
 
     def purge_live_sessions(self, days_old: Optional[int] = None) -> Dict[str, Any]:
         """Purge old live trading sessions from database."""

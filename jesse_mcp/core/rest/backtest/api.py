@@ -87,13 +87,23 @@ def poll_backtest_result(
                         )
 
                     if status == "finished":
-                        logger.info(f"✅ Backtest {backtest_id[:8]} finished in {elapsed:.1f}s")
-                        return get_backtest_session_result(session, base_url, backtest_id)
+                        logger.info(
+                            f"✅ Backtest {backtest_id[:8]} finished in {elapsed:.1f}s"
+                        )
+                        return get_backtest_session_result(
+                            session, base_url, backtest_id
+                        )
                     elif status in ("stopped", "cancelled"):
-                        logger.info(f"⏹️  Backtest {backtest_id[:8]} {status} in {elapsed:.1f}s")
-                        return get_backtest_session_result(session, base_url, backtest_id)
+                        logger.info(
+                            f"⏹️  Backtest {backtest_id[:8]} {status} in {elapsed:.1f}s"
+                        )
+                        return get_backtest_session_result(
+                            session, base_url, backtest_id
+                        )
                     elif status == "failed" or status == "error":
-                        logger.error(f"❌ Backtest {backtest_id[:8]} failed after {elapsed:.1f}s")
+                        logger.error(
+                            f"❌ Backtest {backtest_id[:8]} failed after {elapsed:.1f}s"
+                        )
                         return {
                             "error": "Backtest failed",
                             "success": False,
@@ -146,7 +156,11 @@ def get_backtest_session_result(
 
         if not metrics:
             logger.warning(f"Empty metrics in backtest result")
-            return {"error": "Empty metrics in result", "success": False, "session": session_data}
+            return {
+                "error": "Empty metrics in result",
+                "success": False,
+                "session": session_data,
+            }
 
         result = {
             "id": backtest_id,
@@ -168,6 +182,8 @@ def get_backtest_session_result(
             "largest_winning_trade": metrics.get("largest_winning_trade"),
             "largest_losing_trade": metrics.get("largest_losing_trade"),
             "max_underwater_period": metrics.get("max_underwater_period"),
+            "win_rate_long": metrics.get("win_rate_long"),
+            "win_rate_short": metrics.get("win_rate_short"),
             "winning_streak": metrics.get("winning_streak"),
             "losing_streak": metrics.get("losing_streak"),
             "equity_curve": session_data.get("equity_curve"),
@@ -249,6 +265,8 @@ def execute_backtest(
 
     if response.status_code == 202 or result.get("message", "").startswith("Started"):
         logger.info(f"⏳ Backtest {backtest_id[:8]} started, polling for completion...")
-        return poll_backtest_result(session, base_url, backtest_id, poll_interval, max_poll_time)
+        return poll_backtest_result(
+            session, base_url, backtest_id, poll_interval, max_poll_time
+        )
 
     return result

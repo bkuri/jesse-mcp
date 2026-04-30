@@ -125,6 +125,9 @@ class JesseWrapper:
         include_trades: bool = False,
         include_equity_curve: bool = False,
         include_logs: bool = False,
+        benchmark: bool = False,
+        candles_pipeline_class: Optional[str] = None,
+        candles_pipeline_kwargs: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Run a backtest using Jesse's research module
@@ -144,6 +147,9 @@ class JesseWrapper:
             include_trades: Include individual trades in response
             include_equity_curve: Include equity curve data
             include_logs: Include strategy logs
+            benchmark: Enable benchmark mode for buy-and-hold comparison
+            candles_pipeline_class: Custom candles pipeline class name
+            candles_pipeline_kwargs: Additional kwargs for candles pipeline
 
         Returns:
             Dict with backtest results and metrics
@@ -205,7 +211,8 @@ class JesseWrapper:
                 routes=routes,
                 data_routes=[],
                 candles={
-                    "Binance-" + symbol: {
+                    "Binance-"
+                    + symbol: {
                         "exchange": exchange,
                         "symbol": symbol,
                         "candles": candles,
@@ -216,6 +223,9 @@ class JesseWrapper:
                 generate_logs=include_logs,
                 hyperparameters=hyperparameters,
                 fast_mode=True,
+                benchmark=benchmark,
+                candles_pipeline_class=candles_pipeline_class,
+                candles_pipeline_kwargs=candles_pipeline_kwargs,
             )
 
             logger.info(
@@ -225,6 +235,229 @@ class JesseWrapper:
 
         except Exception as e:
             logger.error(f"❌ Backtest failed: {e}")
+            logger.error(traceback.format_exc())
+            return {"error": str(e), "error_type": type(e).__name__, "success": False}
+
+    def plot_significance_test(
+        self,
+        strategy: str,
+        symbol: str,
+        timeframe: str,
+        start_date: str,
+        end_date: str,
+        exchange: str = "Binance",
+        starting_balance: float = 10000,
+        fee: float = 0.001,
+        leverage: float = 1,
+        exchange_type: str = "futures",
+        hyperparameters: Optional[Dict[str, Any]] = None,
+        n_bootstrap: int = 1000,
+        output_path: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Generate bootstrap significance test histogram chart using Jesse's research module.
+
+        Creates a PNG histogram of the bootstrap sampling distribution with
+        the observed mean annotated, saved to disk.
+
+        Args:
+            strategy: Strategy name
+            symbol: Trading symbol (e.g., "BTC-USDT")
+            timeframe: Candle timeframe (e.g., "1h", "4h")
+            start_date: Start date "YYYY-MM-DD"
+            end_date: End date "YYYY-MM-DD"
+            exchange: Exchange name (default: Binance)
+            starting_balance: Initial capital (default: 10000)
+            fee: Trading fee as decimal (default: 0.001)
+            leverage: Leverage for futures (default: 1)
+            exchange_type: 'spot' or 'futures' (default: futures)
+            hyperparameters: Dict of strategy hyperparameter overrides
+            n_bootstrap: Number of bootstrap samples (default: 1000)
+            output_path: Optional custom output path for the PNG file
+
+        Returns:
+            Dict with chart_path pointing to the generated PNG file
+        """
+        try:
+            if not JESSE_RESEARCH_AVAILABLE:
+                return {
+                    "error": "Plot significance test requires local Jesse research module",
+                    "detail": "This tool requires Jesse.research module which needs full Jesse installation.",
+                    "success": False,
+                }
+
+            logger.info(
+                f"Starting plot significance test: {strategy} on {symbol} ({timeframe})"
+            )
+
+            config = {
+                "starting_balance": starting_balance,
+                "fee": fee,
+                "type": exchange_type,
+                "futures_leverage": leverage,
+                "futures_leverage_mode": "cross",
+                "exchange": exchange,
+                "warm_up_candles": 240,
+            }
+
+            routes = [
+                {
+                    "exchange": exchange,
+                    "strategy": strategy,
+                    "symbol": symbol,
+                    "timeframe": timeframe,
+                }
+            ]
+
+            start_ts = jh.arrow_to_timestamp(start_date)
+            end_ts = jh.arrow_to_timestamp(end_date)
+
+            candles, warmup = research.get_candles(
+                exchange=exchange,
+                symbol=symbol,
+                timeframe=timeframe,
+                start_date_timestamp=start_ts,
+                finish_date_timestamp=end_ts,
+                warmup_candles_num=240,
+            )
+
+            if candles is None or len(candles) == 0:
+                raise JesseIntegrationError(f"No candle data available for {symbol}")
+
+            plot_kwargs = {}
+            if output_path is not None:
+                plot_kwargs["output_path"] = output_path
+
+            chart_path = research.plot_significance_test(
+                config=config,
+                routes=routes,
+                data_routes=[],
+                candles={
+                    "Binance-"
+                    + symbol: {
+                        "exchange": exchange,
+                        "symbol": symbol,
+                        "candles": candles,
+                    }
+                },
+                hyperparameters=hyperparameters,
+                n_bootstrap=n_bootstrap,
+                **plot_kwargs,
+            )
+
+            logger.info(f"✅ Plot significance test chart saved: {chart_path}")
+            return {"chart_path": str(chart_path), "success": True}
+
+        except Exception as e:
+            logger.error(f"❌ Plot significance test failed: {e}")
+            logger.error(traceback.format_exc())
+            return {"error": str(e), "error_type": type(e).__name__, "success": False}
+
+    def rule_significance_test(
+        self,
+        strategy: str,
+        symbol: str,
+        timeframe: str,
+        start_date: str,
+        end_date: str,
+        exchange: str = "Binance",
+        starting_balance: float = 10000,
+        fee: float = 0.001,
+        leverage: float = 1,
+        exchange_type: str = "futures",
+        hyperparameters: Optional[Dict[str, Any]] = None,
+        n_bootstrap: int = 1000,
+    ) -> Dict[str, Any]:
+        """
+        Run bootstrap-based rule significance test using Jesse's research module.
+
+        Evaluates whether a trading rule's mean return is statistically
+        distinguishable from random noise.
+
+        Args:
+            strategy: Strategy name
+            symbol: Trading symbol (e.g., "BTC-USDT")
+            timeframe: Candle timeframe (e.g., "1h", "4h")
+            start_date: Start date "YYYY-MM-DD"
+            end_date: End date "YYYY-MM-DD"
+            exchange: Exchange name (default: Binance)
+            starting_balance: Initial capital (default: 10000)
+            fee: Trading fee as decimal (default: 0.001)
+            leverage: Leverage for futures (default: 1)
+            exchange_type: 'spot' or 'futures' (default: futures)
+            hyperparameters: Dict of strategy hyperparameter overrides
+            n_bootstrap: Number of bootstrap samples (default: 1000)
+
+        Returns:
+            Dict with significance test results including p-value and distribution
+        """
+        try:
+            if not JESSE_RESEARCH_AVAILABLE:
+                return {
+                    "error": "Rule significance test requires local Jesse research module",
+                    "detail": "This tool requires Jesse.research module which needs full Jesse installation.",
+                    "success": False,
+                }
+
+            logger.info(
+                f"Starting rule significance test: {strategy} on {symbol} ({timeframe})"
+            )
+
+            config = {
+                "starting_balance": starting_balance,
+                "fee": fee,
+                "type": exchange_type,
+                "futures_leverage": leverage,
+                "futures_leverage_mode": "cross",
+                "exchange": exchange,
+                "warm_up_candles": 240,
+            }
+
+            routes = [
+                {
+                    "exchange": exchange,
+                    "strategy": strategy,
+                    "symbol": symbol,
+                    "timeframe": timeframe,
+                }
+            ]
+
+            start_ts = jh.arrow_to_timestamp(start_date)
+            end_ts = jh.arrow_to_timestamp(end_date)
+
+            candles, warmup = research.get_candles(
+                exchange=exchange,
+                symbol=symbol,
+                timeframe=timeframe,
+                start_date_timestamp=start_ts,
+                finish_date_timestamp=end_ts,
+                warmup_candles_num=240,
+            )
+
+            if candles is None or len(candles) == 0:
+                raise JesseIntegrationError(f"No candle data available for {symbol}")
+
+            result = research.rule_significance_test(
+                config=config,
+                routes=routes,
+                data_routes=[],
+                candles={
+                    "Binance-"
+                    + symbol: {
+                        "exchange": exchange,
+                        "symbol": symbol,
+                        "candles": candles,
+                    }
+                },
+                hyperparameters=hyperparameters,
+                n_bootstrap=n_bootstrap,
+            )
+
+            logger.info(f"✅ Rule significance test complete: {strategy} on {symbol}")
+            return result
+
+        except Exception as e:
+            logger.error(f"❌ Rule significance test failed: {e}")
             logger.error(traceback.format_exc())
             return {"error": str(e), "error_type": type(e).__name__, "success": False}
 
@@ -251,7 +484,9 @@ class JesseWrapper:
                 if os.path.isdir(item_path) and not item.startswith("_"):
                     init_file = os.path.join(item_path, "__init__.py")
                     if os.path.exists(init_file):
-                        strategies.append({"name": item, "path": item_path, "init_file": init_file})
+                        strategies.append(
+                            {"name": item, "path": item_path, "init_file": init_file}
+                        )
 
             logger.info(f"Found {len(strategies)} strategies")
             return {
@@ -277,7 +512,9 @@ class JesseWrapper:
             logger.info(f"Reading strategy: {name}")
 
             if not self.strategies_path:
-                raise JesseIntegrationError(f"Strategy path not available (using REST API)")
+                raise JesseIntegrationError(
+                    f"Strategy path not available (using REST API)"
+                )
 
             strategy_path = os.path.join(self.strategies_path, name, "__init__.py")
 
@@ -339,7 +576,9 @@ class JesseWrapper:
                 "has_hyperparameters": "def hyperparameters(" in code,
             }
 
-            logger.info(f"Strategy validation: {'✅ Valid' if result['valid'] else '❌ Invalid'}")
+            logger.info(
+                f"Strategy validation: {'✅ Valid' if result['valid'] else '❌ Invalid'}"
+            )
             return result
 
         except Exception as e:
@@ -358,12 +597,17 @@ class JesseWrapper:
             )
         return True, name
 
-    def save_strategy(self, name: str, code: str, overwrite: bool = False) -> Dict[str, Any]:
+    def save_strategy(
+        self, name: str, code: str, overwrite: bool = False
+    ) -> Dict[str, Any]:
         try:
             logger.info(f"Saving strategy: {name}")
 
             if not self.strategies_path:
-                return {"success": False, "error": "Strategy path not available (using REST API)"}
+                return {
+                    "success": False,
+                    "error": "Strategy path not available (using REST API)",
+                }
 
             valid, sanitized = self._sanitize_strategy_name(name)
             if not valid:
@@ -378,7 +622,10 @@ class JesseWrapper:
                 not real_strategy_dir.startswith(real_strategies_path + os.sep)
                 and real_strategy_dir != real_strategies_path
             ):
-                return {"success": False, "error": "Invalid strategy path: path traversal detected"}
+                return {
+                    "success": False,
+                    "error": "Invalid strategy path: path traversal detected",
+                }
 
             if os.path.exists(strategy_file) and not overwrite:
                 return {
@@ -408,7 +655,10 @@ class JesseWrapper:
             logger.info(f"Deleting strategy: {name}")
 
             if not self.strategies_path:
-                return {"success": False, "error": "Strategy path not available (using REST API)"}
+                return {
+                    "success": False,
+                    "error": "Strategy path not available (using REST API)",
+                }
 
             valid, sanitized = self._sanitize_strategy_name(name)
             if not valid:
@@ -422,10 +672,16 @@ class JesseWrapper:
                 not real_strategy_dir.startswith(real_strategies_path + os.sep)
                 and real_strategy_dir != real_strategies_path
             ):
-                return {"success": False, "error": "Invalid strategy path: path traversal detected"}
+                return {
+                    "success": False,
+                    "error": "Invalid strategy path: path traversal detected",
+                }
 
             if not os.path.exists(strategy_dir):
-                return {"success": False, "error": f"Strategy '{sanitized}' does not exist"}
+                return {
+                    "success": False,
+                    "error": f"Strategy '{sanitized}' does not exist",
+                }
 
             shutil.rmtree(strategy_dir)
 
@@ -526,7 +782,9 @@ class JesseWrapper:
             Dict with available date ranges
         """
         try:
-            logger.info(f"Getting available candles (exchange={exchange}, symbol={symbol})")
+            logger.info(
+                f"Getting available candles (exchange={exchange}, symbol={symbol})"
+            )
 
             # This would query the database for available data
             # For now, return a placeholder that indicates this needs database access
