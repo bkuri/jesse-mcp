@@ -2,13 +2,14 @@
 """
 Jesse MCP Server - FastMCP Implementation
 
-Provides 46 tools for quantitative trading analysis:
+Provides 51 tools for quantitative trading analysis:
 - Phase 1: Backtesting (5 tools)
 - Phase 3: Optimization (4 tools)
 - Phase 4: Risk Analysis (4 tools)
 - Phase 5: Pairs Trading (5 tools)
 - Phase 6: Live Trading (12 tools)
 - Strategy Creation (6 tools) - Ralph Wiggum Loop with progress tracking
+- Community (5 tools) - jesse.trade community strategy browsing & comparison
 
 Tools are registered from modular files in jesse_mcp/tools/:
 - backtesting.py, strategy.py, optimization.py, risk.py, pairs.py, live.py
@@ -146,6 +147,7 @@ def _register_all_tools():
     from jesse_mcp.tools.risk import register_risk_tools
     from jesse_mcp.tools.pairs import register_pairs_tools
     from jesse_mcp.tools.live import register_live_tools
+    from jesse_mcp.tools.jesse_trade import register_jesse_trade_tools
 
     register_backtesting_tools(mcp)
     logger.info("✅ Backtesting tools registered")
@@ -164,6 +166,9 @@ def _register_all_tools():
 
     register_live_tools(mcp)
     logger.info("✅ Live trading tools registered")
+
+    register_jesse_trade_tools(mcp)
+    logger.info("✅ jesse.trade community tools registered")
 
 
 # ==================== MAIN ENTRY POINT ====================

@@ -60,6 +60,7 @@ jesse-mcp --help
 | `JESSE_URL` | Jesse REST API URL | `http://server2:9100` |
 | `JESSE_PASSWORD` | Jesse UI password | (required) |
 | `JESSE_API_TOKEN` | Pre-generated API token | (alternative to password) |
+| `JESSE_TRADE_API_KEY` | jesse.trade community API Bearer token | (optional) |
 
 ## Features
 
@@ -70,6 +71,7 @@ jesse-mcp --help
 - **Strategy Management** - CRUD operations for trading strategies
 - **Risk Analysis** - VaR, stress testing, comprehensive risk reports
 - **Agent Tools** - 15 specialized tools for autonomous trading workflows
+- **Community Browsing** - Browse, compare, and inspect jesse.trade community strategies
 
 ## Architecture
 
@@ -79,7 +81,7 @@ LLM Agent ←→ MCP Protocol ←→ jesse-mcp ←→ Jesse REST API (localhost:
                             Mock Fallbacks (when Jesse unavailable)
 ```
 
-## Available Tools (32 Total)
+## Available Tools (51 Total)
 
 ### Core Tools (17)
 
