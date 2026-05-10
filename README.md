@@ -81,7 +81,7 @@ LLM Agent ←→ MCP Protocol ←→ jesse-mcp ←→ Jesse REST API (localhost:
                             Mock Fallbacks (when Jesse unavailable)
 ```
 
-## Available Tools (51 Total)
+## Available Tools
 
 ### Core Tools (17)
 
@@ -143,6 +143,18 @@ Specialized tools for autonomous trading workflows:
 | `backtest_monte_carlo` | Backtest with Monte Carlo analysis |
 | `backtest_analyze_regimes` | Regime-aware backtest analysis |
 | `backtest_validate_significance` | Statistical significance validation |
+
+### Community Tools (5)
+
+Browse, compare, and inspect community strategies from jesse.trade:
+
+| Tool | Description |
+|------|-------------|
+| `list_periods` | List available backtest periods on jesse.trade |
+| `browse_community_strategies` | Browse strategies sorted by performance metrics |
+| `get_strategy_metrics` | Detailed backtest metrics for a specific strategy |
+| `get_strategy_code` | Full Python source code for a strategy |
+| `compare_community_strategies` | Side-by-side metric comparison of multiple strategies |
 
 ## Testing
 

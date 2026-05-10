@@ -20,6 +20,8 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
+from jesse_mcp.tools._utils import tool_error_handler
+
 logger = logging.getLogger("jesse-mcp.community")
 
 _BASE_URL = "https://api2.jesse.trade"
@@ -190,7 +192,7 @@ def register_jesse_trade_tools(mcp):
 
     @mcp.tool
     @tool_error_handler
-    def get_strategy_code(slug: str) -> Dict[str, Any]:
+    def get_strategy_code(slug: str, period: Optional[str] = None) -> Dict[str, Any]:
         """
         Get the full Python source code for a community strategy.
 
@@ -200,11 +202,23 @@ def register_jesse_trade_tools(mcp):
 
         Args:
             slug: Strategy slug from jesse.trade URL (e.g. 'rsi-trend')
+            period: Backtest period to search (optional, defaults to latest available)
         """
+        # Resolve period — use provided or fetch latest from API
+        if not period:
+            pr = requests.get(
+                f"{_BASE_URL}/strategies/periods", headers=_get_headers(), timeout=30
+            )
+            pr.raise_for_status()
+            periods = pr.json().get("periods", [])
+            if not periods:
+                return {"error": "No periods available from jesse.trade", "slug": slug}
+            period = periods[0]
+
         r = requests.get(
             f"{_BASE_URL}/strategies",
             headers=_get_headers(),
-            params={"period": "December 2025"},  # need a period to get the list
+            params={"period": period},
             timeout=30,
         )
         r.raise_for_status()
@@ -249,11 +263,15 @@ def register_jesse_trade_tools(mcp):
         are worth further investigation.
 
         Args:
-            slugs: List of strategy slugs to compare (e.g. ['rsi-trend', 'simple-bollinger-bands-strategy'])
+            slugs: List of strategy slugs to compare (e.g. ['rsi-trend', 'simple-bollinger-bands-strategy']). Max 20.
             period: Backtest period for comparison (e.g. 'December 2025')
             symbol: Trading pair (default 'BTC-USDT')
             timeframe: Candle timeframe (default '1h')
         """
+        max_slugs = 20
+        if len(slugs) > max_slugs:
+            return {"error": f"Too many slugs ({len(slugs)}), max {max_slugs}", "provided": len(slugs)}
+
         results = []
         for slug in slugs:
             r = requests.get(
@@ -271,8 +289,14 @@ def register_jesse_trade_tools(mcp):
             else:
                 results.append({"slug": slug, "error": f"HTTP {r.status_code}"})
 
-        # Sort by Sharpe ratio descending
-        results.sort(key=lambda x: x.get("sharpe_ratio", float("-inf")), reverse=True)
+        def _safe_sharpe(item: Dict[str, Any]) -> float:
+            try:
+                v = item.get("sharpe_ratio")
+                return float(v) if v is not None else float("-inf")
+            except (TypeError, ValueError):
+                return float("-inf")
+
+        results.sort(key=_safe_sharpe, reverse=True)
 
         return {
             "period": period,
